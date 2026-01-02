@@ -35,6 +35,16 @@ export const fetchUsersCount = async (): Promise<number> => {
   return snap.size;
 };
 
+export const fetchBillsCount = async (): Promise<number> => {
+  const currentUser = useUserStore.getState().user;
+  if (!currentUser?.isAdmin) {
+    throw new Error('Only admin can view bills count.');
+  }
+
+  const snap = await getDocs(collection(db, 'Bills'));
+  return snap.size;
+};
+
 export const createUserWallet = async (uid: string): Promise<void> => {
   const currentUser = useUserStore.getState().user;
   if (!currentUser?.isAdmin) {

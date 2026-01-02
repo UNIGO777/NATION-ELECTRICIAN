@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { FileText } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -32,6 +32,8 @@ type BillRecord = {
   status?: 'pending' | 'approved' | 'rejected' | string | null;
   decidedBy?: string | null;
   decidedAt?: number | null;
+  billNumber?: string | null;
+  customerName?: string | null;
   images?: unknown[] | null;
   items?: unknown[] | null;
   totalQuantity?: number | null;
@@ -354,12 +356,14 @@ export default function AdminBills() {
             <Text className="text-neutral-500 font-semibold">No bills found</Text>
           </View>
         ) : (
-          <View className="flex-1 mt-4">
+          <ScrollView className="flex-1 mt-4" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
             {bills.map((b) => {
               const status = String(b.data.status ?? 'pending');
               const isPending = status === 'pending';
               const amount = typeof b.data.totalAmount === 'number' ? b.data.totalAmount : 0;
-              const qty = typeof b.data.totalQuantity === 'number' ? b.data.totalQuantity : 0;
+              const billNo = typeof b.data.billNumber === 'string' && b.data.billNumber.trim() ? b.data.billNumber.trim() : b.id;
+              const customer =
+                typeof b.data.customerName === 'string' && b.data.customerName.trim() ? b.data.customerName.trim() : '—';
               const imageCount = Array.isArray(b.data.images) ? b.data.images.length : 0;
               const createdAt =
                 typeof b.data.createdAt === 'number' ? new Date(b.data.createdAt).toDateString() : '—';
@@ -375,7 +379,7 @@ export default function AdminBills() {
                 >
                   <View className="flex-row items-center justify-between">
                     <View>
-                      <Text className="text-neutral-900 font-extrabold">Bill #{b.id}</Text>
+                      <Text className="text-neutral-900 font-extrabold">Bill No: {billNo}</Text>
                       <Text className="text-xs text-neutral-500 mt-1">
                         UID: {String(b.data.uid ?? '—')}
                       </Text>
@@ -386,7 +390,7 @@ export default function AdminBills() {
                   </View>
 
                   <View className="flex-row justify-between mt-3">
-                    <Text className="text-xs text-neutral-500">Qty: {qty}</Text>
+                    <Text className="text-xs text-neutral-500">Customer: {customer}</Text>
                     <Text className="text-xs text-neutral-500">Amount: {amount}</Text>
                     <Text className="text-xs text-neutral-500">Images: {imageCount}</Text>
                   </View>
@@ -425,7 +429,7 @@ export default function AdminBills() {
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
         )}
       </View>
 

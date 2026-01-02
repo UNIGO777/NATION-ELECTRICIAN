@@ -11,18 +11,12 @@ import UserProfileModal from '@/AdminComponents/UserProfileModal';
 import { db } from '@/Globalservices/firebase';
 import { useUserStore } from '@/Globalservices/userStore';
 
-type BillItem = {
-  name?: unknown;
-  quantity?: unknown;
-  price?: unknown;
-};
-
 type BillRecord = {
   uid?: unknown;
   status?: unknown;
+  billNumber?: unknown;
+  customerName?: unknown;
   images?: unknown;
-  items?: unknown;
-  totalQuantity?: unknown;
   totalAmount?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -241,16 +235,15 @@ export default function BillProfileModal({ visible, billId, onClose }: Props) {
     }
   }, [previewImageUri]);
 
-  const items = useMemo(() => {
-    const raw = bill?.items;
-    if (!Array.isArray(raw)) return [];
-    return raw.filter((x): x is BillItem => Boolean(x && typeof x === 'object'));
-  }, [bill?.items]);
+  const billNumberText = useMemo(() => {
+    const v = bill?.billNumber;
+    return typeof v === 'string' && v.trim() ? v.trim() : '—';
+  }, [bill?.billNumber]);
 
-  const totalQuantity = useMemo(() => {
-    const v = bill?.totalQuantity;
-    return typeof v === 'number' ? v : 0;
-  }, [bill?.totalQuantity]);
+  const customerNameText = useMemo(() => {
+    const v = bill?.customerName;
+    return typeof v === 'string' && v.trim() ? v.trim() : '—';
+  }, [bill?.customerName]);
 
   const totalAmount = useMemo(() => {
     const v = bill?.totalAmount;
@@ -298,6 +291,8 @@ export default function BillProfileModal({ visible, billId, onClose }: Props) {
             )
           )
         ),
+        React.createElement(Text, { style: styles.metaText }, `Bill Number: ${billNumberText}`),
+        React.createElement(Text, { style: styles.metaText }, `Customer Name: ${customerNameText}`),
         React.createElement(Text, { style: styles.metaText }, `Created: ${createdAtText}`),
         React.createElement(Text, { style: styles.metaText }, `Updated: ${updatedAtText}`),
         approvedCoinsText
@@ -309,8 +304,8 @@ export default function BillProfileModal({ visible, billId, onClose }: Props) {
           React.createElement(
             View,
             { style: styles.statBox },
-            React.createElement(Text, { style: styles.statLabel }, 'Total Qty'),
-            React.createElement(Text, { style: styles.statValue }, String(totalQuantity))
+            React.createElement(Text, { style: styles.statLabel }, 'Customer'),
+            React.createElement(Text, { style: styles.statValue }, String(customerNameText))
           ),
           React.createElement(
             View,
@@ -348,39 +343,6 @@ export default function BillProfileModal({ visible, billId, onClose }: Props) {
       )
     : null;
 
-  const itemsCard = bill
-    ? React.createElement(
-        View,
-        { style: styles.card },
-        React.createElement(Text, { style: styles.cardTitle }, 'Items'),
-        React.createElement(Text, { style: styles.metaText }, `Count: ${items.length}`),
-        items.length
-          ? React.createElement(
-              View,
-              { style: styles.itemsWrap },
-              items.map((it, idx) => {
-                const name = typeof it.name === 'string' ? it.name : '';
-                const quantity = typeof it.quantity === 'number' ? it.quantity : 0;
-                const price = typeof it.price === 'number' ? it.price : 0;
-                const lineTotal = quantity * price;
-                return React.createElement(
-                  View,
-                  { key: `${name || 'item'}-${idx}`, style: styles.itemRow },
-                  React.createElement(Text, { style: styles.itemName }, name || `Item ${idx + 1}`),
-                  React.createElement(
-                    View,
-                    { style: styles.itemMetaRow },
-                    React.createElement(Text, { style: styles.itemMeta }, `Qty: ${quantity}`),
-                    React.createElement(Text, { style: styles.itemMeta }, `Price: ${price}`),
-                    React.createElement(Text, { style: styles.itemMeta }, `Total: ${lineTotal}`)
-                  )
-                );
-              })
-            )
-          : React.createElement(Text, { style: styles.mutedText }, 'No items')
-      )
-    : null;
-
   const content = loading
     ? React.createElement(
         View,
@@ -391,7 +353,7 @@ export default function BillProfileModal({ visible, billId, onClose }: Props) {
       ? renderMessage(errorText, 'error')
       : !bill
         ? renderMessage('No data', 'muted')
-        : React.createElement(React.Fragment, null, detailsCard, imagesCard, itemsCard);
+        : React.createElement(React.Fragment, null, detailsCard, imagesCard);
 
   return React.createElement(
     Modal,

@@ -145,6 +145,12 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <User color={color} size={size ?? 22} />,
         }}
       />
+      <Tabs.Screen
+        name="search"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

@@ -9,7 +9,7 @@ import AdminNavbar from '@/AdminComponents/AdminNavbar';
 import { HapticTab } from '@/components/haptic-tab';
 import { db } from '@/Globalservices/firebase';
 import { useUserStore } from '@/Globalservices/userStore';
-import { BarChart3, FileText, Home, Users } from 'lucide-react-native';
+import { FileText, Gift, Home, Package, Users } from 'lucide-react-native';
 import { doc, setDoc } from 'firebase/firestore/lite';
 
 export default function AdminTabLayout() {
@@ -139,10 +139,17 @@ export default function AdminTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="report"
+        name="products"
         options={{
-          title: 'Report',
-          tabBarIcon: ({ color, size }) => <BarChart3 color={color} size={size ?? 24} />,
+          title: 'Products',
+          tabBarIcon: ({ color, size }) => <Package color={color} size={size ?? 24} />,
+        }}
+      />
+      <Tabs.Screen
+        name="schemes"
+        options={{
+          title: 'Schemes',
+          tabBarIcon: ({ color, size }) => <Gift color={color} size={size ?? 24} />,
         }}
       />
       <Tabs.Screen name="billprofile" options={{ href: null }} />

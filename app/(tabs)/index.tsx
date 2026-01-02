@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,8 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, DollarSign, Gift, Package, Upload } from 'lucide-react-native';
-
+import { Bell, Coins, Gift, Package, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import NotificationsPopup from '@/components/user/NotificationsPopup';
@@ -23,15 +21,17 @@ import { useUserStore } from '@/Globalservices/userStore';
 import {
   addDoc,
   collection,
+  doc,
   getDocs,
   limit,
   orderBy,
   query,
+  setDoc,
   startAfter,
   where,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore/lite';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 
 type WalletDoc = {
   uid?: string | null;
@@ -45,13 +45,6 @@ type HistoryItem = {
   subtitle: string;
   pointsText: string;
   pointsColor: string;
-};
-
-type BillItemForm = {
-  id: string;
-  name: string;
-  quantity: string;
-  price: string;
 };
 
 const PAGE_SIZE = 10;
@@ -81,14 +74,16 @@ export default function HomeScreen() {
 
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [billImageUris, setBillImageUris] = useState<string[]>([]);
-  const [billItems, setBillItems] = useState<BillItemForm[]>([
-    { id: String(Date.now()), name: '', quantity: '1', price: '' },
-  ]);
+  const [billNumber, setBillNumber] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [billTotalAmount, setBillTotalAmount] = useState('');
   const [billSubmitting, setBillSubmitting] = useState(false);
 
   const resetBillForm = useCallback(() => {
     setBillImageUris([]);
-    setBillItems([{ id: String(Date.now()), name: '', quantity: '1', price: '' }]);
+    setBillNumber('');
+    setCustomerName('');
+    setBillTotalAmount('');
     setBillSubmitting(false);
   }, []);
 
@@ -98,40 +93,24 @@ export default function HomeScreen() {
   }, [resetBillForm]);
 
   const pickBillImages = useCallback(async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission required', 'Please allow photo access to upload bill images.');
+    if (billSubmitting) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('Permission required', 'Allow photo access to select bill images.');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
-      quality: 0.9,
       selectionLimit: 10,
+      quality: 0.8,
     });
 
     if (result.canceled) return;
     const uris = result.assets.map((a) => a.uri).filter(Boolean);
     setBillImageUris(uris);
-  }, []);
-
-  const updateBillItem = useCallback((id: string, patch: Partial<Omit<BillItemForm, 'id'>>) => {
-    setBillItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
-    );
-  }, []);
-
-  const addBillItem = useCallback(() => {
-    setBillItems((prev) => [...prev, { id: String(Date.now() + prev.length), name: '', quantity: '1', price: '' }]);
-  }, []);
-
-  const removeBillItem = useCallback((id: string) => {
-    setBillItems((prev) => {
-      const next = prev.filter((i) => i.id !== id);
-      return next.length ? next : [{ id: String(Date.now()), name: '', quantity: '1', price: '' }];
-    });
-  }, []);
+  }, [billSubmitting]);
 
   const formatDateLabel = useCallback((value: unknown): string => {
     if (typeof value === 'number') {
@@ -339,62 +318,54 @@ export default function HomeScreen() {
       Alert.alert('Not logged in', 'Please login first.');
       return;
     }
-    if (!billImageUris.length) {
-      Alert.alert('Bill images required', 'Please select at least one bill image.');
+    const billNo = billNumber.trim();
+    if (!billNo) {
+      Alert.alert('Bill number required', 'Please enter bill number.');
       return;
     }
 
-    const normalizedItems = billItems
-      .map((i) => {
-        const name = i.name.trim();
-        const quantity = Number(i.quantity);
-        const price = Number(i.price);
-        return {
-          name,
-          quantity: Number.isFinite(quantity) ? quantity : 0,
-          price: Number.isFinite(price) ? price : 0,
-        };
-      })
-      .filter((i) => i.name && i.quantity > 0 && i.price >= 0);
+    const name = customerName.trim();
+    if (!name) {
+      Alert.alert('Customer name required', 'Please enter customer name.');
+      return;
+    }
 
-    if (!normalizedItems.length) {
-      Alert.alert('Items required', 'Please add at least one item with quantity and price.');
+    const amount = Number(billTotalAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      Alert.alert('Total amount required', 'Please enter valid total amount.');
       return;
     }
 
     setBillSubmitting(true);
     try {
       const now = Date.now();
-      const uploadFolder = `bills/${uid}/${now}`;
-      const imageUrls: string[] = [];
-
-      for (let index = 0; index < billImageUris.length; index += 1) {
-        const uri = billImageUris[index];
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const imageRef = ref(storage, `${uploadFolder}/${index}.jpg`);
-        await uploadBytes(imageRef, blob);
-        const url = await getDownloadURL(imageRef);
-        imageUrls.push(url);
+      if (!billImageUris.length) {
+        Alert.alert('Bill images required', 'Please select at least 1 bill image.');
+        return;
       }
 
-      const totals = normalizedItems.reduce(
-        (acc, item) => {
-          return {
-            totalQuantity: acc.totalQuantity + item.quantity,
-            totalAmount: acc.totalAmount + item.quantity * item.price,
-          };
-        },
-        { totalQuantity: 0, totalAmount: 0 }
+      const billRef = doc(collection(db, 'Bills'));
+      const imageUrls = await Promise.all(
+        billImageUris.map(async (uri, idx) => {
+          const normalized = uri.split('?')[0] ?? uri;
+          const rawExt = normalized.split('.').pop()?.toLowerCase();
+          const ext = rawExt && rawExt.length <= 5 ? rawExt : 'jpg';
+
+          const res = await fetch(uri);
+          const blob = await res.blob();
+          const objectRef = storageRef(storage, `Bills/${uid}/${billRef.id}/${idx}.${ext}`);
+          await uploadBytes(objectRef, blob, { contentType: blob.type || 'image/jpeg' });
+          return getDownloadURL(objectRef);
+        })
       );
 
-      const billRef = await addDoc(collection(db, 'Bills'), {
+      await setDoc(billRef, {
         uid,
         status: 'pending',
+        billNumber: billNo,
+        customerName: name,
+        totalAmount: amount,
         images: imageUrls,
-        items: normalizedItems,
-        totalQuantity: totals.totalQuantity,
-        totalAmount: totals.totalAmount,
         createdAt: now,
         updatedAt: now,
       });
@@ -406,6 +377,8 @@ export default function HomeScreen() {
         coinsDelta: 0,
         createdAt: now,
         billId: billRef.id,
+        billNumber: billNo,
+        totalAmount: amount,
       });
 
       Alert.alert('Uploaded', 'Your bill was uploaded successfully.');
@@ -416,7 +389,7 @@ export default function HomeScreen() {
     } finally {
       setBillSubmitting(false);
     }
-  }, [billImageUris, billItems, closeUpload, fetchHistoryPage, uid]);
+  }, [billImageUris, billNumber, billTotalAmount, closeUpload, customerName, fetchHistoryPage, uid]);
 
   const coinsText = useMemo(() => {
     return walletCoins.toLocaleString();
@@ -458,7 +431,7 @@ export default function HomeScreen() {
               {!!uid && <Text style={styles.walletUid}>UID: {uid}</Text>}
             </View>
             <View style={styles.moneyCircle}>
-              <DollarSign color="#ffffff" size={18} />
+              <Coins color="#ffffff" size={18} />
             </View>
           </View>
 
@@ -580,58 +553,36 @@ export default function HomeScreen() {
                 </Pressable>
               </View>
 
-              <Text style={styles.modalSectionTitle}>Items</Text>
-              {billItems.map((item) => (
-                <View key={item.id} style={styles.itemCard}>
-                  <TextInput
-                    value={item.name}
-                    onChangeText={(t) => updateBillItem(item.id, { name: t })}
-                    placeholder="Item name"
-                    placeholderTextColor="#9ca3af"
-                    style={styles.input}
-                    editable={!billSubmitting}
-                  />
+              <Text style={styles.modalSectionTitle}>Customer Name</Text>
+              <TextInput
+                value={customerName}
+                onChangeText={setCustomerName}
+                placeholder="Customer name"
+                placeholderTextColor="#9ca3af"
+                style={styles.input}
+                editable={!billSubmitting}
+              />
 
-                  <View style={styles.itemRow}>
-                    <View style={styles.itemField}>
-                      <Text style={styles.inputLabel}>Qty</Text>
-                      <TextInput
-                        value={item.quantity}
-                        onChangeText={(t) => updateBillItem(item.id, { quantity: t })}
-                        placeholder="1"
-                        placeholderTextColor="#9ca3af"
-                        keyboardType={Platform.select({ ios: 'number-pad', android: 'numeric', default: 'numeric' })}
-                        style={styles.input}
-                        editable={!billSubmitting}
-                      />
-                    </View>
-                    <View style={styles.itemField}>
-                      <Text style={styles.inputLabel}>Price</Text>
-                      <TextInput
-                        value={item.price}
-                        onChangeText={(t) => updateBillItem(item.id, { price: t })}
-                        placeholder="0"
-                        placeholderTextColor="#9ca3af"
-                        keyboardType={Platform.select({ ios: 'decimal-pad', android: 'numeric', default: 'numeric' })}
-                        style={styles.input}
-                        editable={!billSubmitting}
-                      />
-                    </View>
-                  </View>
+              <Text style={styles.modalSectionTitle}>Bill Number</Text>
+              <TextInput
+                value={billNumber}
+                onChangeText={setBillNumber}
+                placeholder="Bill number"
+                placeholderTextColor="#9ca3af"
+                style={styles.input}
+                editable={!billSubmitting}
+              />
 
-                  <Pressable
-                    onPress={() => removeBillItem(item.id)}
-                    disabled={billSubmitting}
-                    style={styles.removeItemButton}
-                  >
-                    <Text style={styles.removeItemText}>Remove</Text>
-                  </Pressable>
-                </View>
-              ))}
-
-              <Pressable onPress={addBillItem} style={styles.secondaryButton} disabled={billSubmitting}>
-                <Text style={styles.secondaryButtonText}>Add Item</Text>
-              </Pressable>
+              <Text style={styles.modalSectionTitle}>Total Amount</Text>
+              <TextInput
+                value={billTotalAmount}
+                onChangeText={setBillTotalAmount}
+                placeholder="Total amount"
+                placeholderTextColor="#9ca3af"
+                keyboardType="numeric"
+                style={styles.input}
+                editable={!billSubmitting}
+              />
 
               <Pressable
                 onPress={submitBillUpload}

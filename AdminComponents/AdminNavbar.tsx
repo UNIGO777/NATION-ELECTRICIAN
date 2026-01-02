@@ -2,7 +2,7 @@ import { usePathname } from 'expo-router';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { BarChart3, FileText, Home, LogOut, Users } from 'lucide-react-native';
+import { FileText, Gift, Home, LogOut, Package, Users } from 'lucide-react-native';
 import { signOut } from 'firebase/auth';
 
 import { auth, isFirebaseConfigured } from '@/Globalservices/firebase';
@@ -13,8 +13,10 @@ const getHeaderConfigFromPath = (pathname: string) => {
     return { title: 'Bills', Icon: FileText, subtitle: 'Manage all invoices' };
   if (pathname.includes('/AdminDashbord/users')) 
     return { title: 'Users', Icon: Users, subtitle: 'User management' };
-  if (pathname.includes('/AdminDashbord/report')) 
-    return { title: 'Reports', Icon: BarChart3, subtitle: 'Analytics & insights' };
+  if (pathname.includes('/AdminDashbord/products')) 
+    return { title: 'Products', Icon: Package, subtitle: 'Manage products' };
+  if (pathname.includes('/AdminDashbord/schemes')) 
+    return { title: 'Schemes', Icon: Gift, subtitle: 'Manage schemes' };
   return { title: 'Dashboard', Icon: Home, subtitle: 'Overview & statistics' };
 };
 

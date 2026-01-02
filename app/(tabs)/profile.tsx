@@ -1,10 +1,11 @@
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LogOut, User as UserIcon } from 'lucide-react-native';
+import { Bell, LogOut, User as UserIcon } from 'lucide-react-native';
 import { signOut } from 'firebase/auth';
 import { useCallback, useMemo, useState } from 'react';
 
 import { auth, db, isFirebaseConfigured } from '@/Globalservices/firebase';
+import NotificationsPopup from '@/components/user/NotificationsPopup';
 import { useUserStore } from '@/Globalservices/userStore';
 import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore/lite';
 
@@ -14,6 +15,8 @@ export default function ProfileScreen() {
   const setUser = useUserStore((s) => s.setUser);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsHasUnread, setNotificationsHasUnread] = useState(false);
 
   const fullName = useMemo(() => {
     const v = user?.fullName ?? user?.name;
@@ -42,6 +45,18 @@ export default function ProfileScreen() {
     const v = raw.toLowerCase();
     return v === 'admin' ? 'admin' : v === 'user' ? 'user' : user?.isAdmin ? 'admin' : 'user';
   }, [user?.isAdmin, user?.role, user?.userType]);
+
+  const refreshUnreadNotifications = useCallback(async () => {
+    const currentUid = typeof user?.uid === 'string' ? user.uid : null;
+    if (!currentUid) return;
+    try {
+      const q = query(collection(db, 'Notifications'), where('uid', '==', currentUid), where('read', '==', false), limit(1));
+      const snap = await getDocs(q);
+      setNotificationsHasUnread(!snap.empty);
+    } catch {
+      setNotificationsHasUnread(false);
+    }
+  }, [user?.uid]);
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -113,13 +128,25 @@ export default function ProfileScreen() {
         }
       >
         <View style={styles.header}>
-          <View style={styles.headerIconWrap}>
-            <UserIcon color="#dc2626" size={20} />
+          <View style={styles.headerLeft}>
+            <View style={styles.headerIconWrap}>
+              <UserIcon color="#dc2626" size={20} />
+            </View>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.title}>Profile</Text>
+              <Text style={styles.subtitle}>{fullName}</Text>
+            </View>
           </View>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.title}>Profile</Text>
-            <Text style={styles.subtitle}>{fullName}</Text>
-          </View>
+          <Pressable
+            style={styles.iconButton}
+            onPress={() => {
+              setNotificationsOpen(true);
+              void refreshUnreadNotifications();
+            }}
+          >
+            <Bell color="#111827" size={18} />
+            {notificationsHasUnread ? <View style={styles.bellDot} /> : null}
+          </Pressable>
         </View>
 
         <View style={styles.card}>
@@ -167,6 +194,15 @@ export default function ProfileScreen() {
           )}
         </Pressable>
       </ScrollView>
+
+      <NotificationsPopup
+        visible={notificationsOpen}
+        uid={typeof user?.uid === 'string' ? user.uid : null}
+        onClose={() => {
+          setNotificationsOpen(false);
+          void refreshUnreadNotifications();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -185,6 +221,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
   headerIconWrap: {
     height: 44,
@@ -198,6 +241,27 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: {
     flex: 1,
+  },
+  iconButton: {
+    height: 40,
+    width: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    height: 8,
+    width: 8,
+    borderRadius: 999,
+    backgroundColor: '#dc2626',
+    borderWidth: 1,
+    borderColor: '#ffffff',
   },
   title: {
     fontSize: 22,

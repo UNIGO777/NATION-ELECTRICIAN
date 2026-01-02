@@ -1,21 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { BarChart3, Package, ShoppingCart, Users, UserPlus, PackagePlus, Settings, FileSearch } from 'lucide-react-native';
+import { Package, ShoppingCart, Users, UserPlus, PackagePlus, Settings, FileSearch, FileText } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
-import { fetchUsersCount } from '@/Globalservices/adminUserServices';
+import { fetchBillsCount, fetchUsersCount } from '@/Globalservices/adminUserServices';
 
 const AdminHomePage: React.FC = () => {
   const [usersCount, setUsersCount] = useState<number | null>(null);
+  const [billsCount, setBillsCount] = useState<number | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    fetchUsersCount()
-      .then((count) => {
+    Promise.all([fetchUsersCount(), fetchBillsCount()])
+      .then(([userCount, billCount]) => {
         if (!isMounted) return;
-        setUsersCount(count);
+        setUsersCount(userCount);
+        setBillsCount(billCount);
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -32,9 +34,9 @@ const AdminHomePage: React.FC = () => {
       { title: 'Users', count: usersCount ?? 0, Icon: Users },
       { title: 'Orders', count: 532, Icon: ShoppingCart },
       { title: 'Products', count: 89, Icon: Package },
-      { title: 'Reports', count: 12, Icon: BarChart3 },
+      { title: 'Bills', count: billsCount ?? 0, Icon: FileText },
     ],
-    [usersCount]
+    [billsCount, usersCount]
   );
 
   const quickActions = useMemo(
