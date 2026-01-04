@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, LogOut, User as UserIcon } from 'lucide-react-native';
 import { signOut } from 'firebase/auth';
 import { useCallback, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { auth, db, isFirebaseConfigured } from '@/Globalservices/firebase';
 import NotificationsPopup from '@/components/user/NotificationsPopup';
@@ -66,6 +67,10 @@ export default function ProfileScreen() {
         await signOut(auth);
       }
     } finally {
+      await Promise.all([
+        AsyncStorage.removeItem('sessionUser').catch(() => null),
+        AsyncStorage.removeItem('userToken').catch(() => null),
+      ]);
       clearUser();
       setIsLoggingOut(false);
     }

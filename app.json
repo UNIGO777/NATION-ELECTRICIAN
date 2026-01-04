@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "NationalElectricians",
-    "slug": "NationalElectricians",
+    "name": "National Smart Saver",
+    "slug": "National Smart Saver",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "nationalelectricians",
+    "icon": "./assets/images/LOGO.png",
+    "scheme": "National Smart Saver",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -33,7 +33,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/LOGO.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",

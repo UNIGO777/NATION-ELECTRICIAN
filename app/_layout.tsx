@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore/lite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { auth, db, isFirebaseConfigured } from '@/Globalservices/firebase';
@@ -16,6 +17,22 @@ import { useUserStore, type UserData } from '@/Globalservices/userStore';
 
 export const unstable_settings = {
   initialRouteName: 'welcome',
+};
+
+const SESSION_USER_KEY = 'sessionUser';
+const TOKEN_KEY = 'userToken';
+
+const parseStoredUser = (raw: string | null): UserData | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const maybeUid = (parsed as { uid?: unknown }).uid;
+    if (typeof maybeUid !== 'string' || !maybeUid) return null;
+    return parsed as UserData;
+  } catch {
+    return null;
+  }
 };
 
 export default function RootLayout() {
@@ -38,6 +55,15 @@ export default function RootLayout() {
       try {
         if (!firebaseUser) {
           blockedAlertUidRef.current = null;
+          const [rawUser, token] = await Promise.all([
+            AsyncStorage.getItem(SESSION_USER_KEY).catch(() => null),
+            AsyncStorage.getItem(TOKEN_KEY).catch(() => null),
+          ]);
+          const storedUser = parseStoredUser(rawUser);
+          if (storedUser && token) {
+            setUser(storedUser);
+            return;
+          }
           clearUser();
           return;
         }
@@ -66,6 +92,10 @@ export default function RootLayout() {
             blockedAlertUidRef.current = firebaseUser.uid;
             Alert.alert('Account Blocked', 'Your account has been blocked. Contact admin for assistance.');
           }
+          await Promise.all([
+            AsyncStorage.removeItem(SESSION_USER_KEY).catch(() => null),
+            AsyncStorage.removeItem(TOKEN_KEY).catch(() => null),
+          ]);
           await signOut(auth).catch(() => null);
           clearUser();
           return;
@@ -84,6 +114,12 @@ export default function RootLayout() {
           ...(userDoc ?? {}),
           isAdmin,
         };
+
+        const token = await firebaseUser.getIdToken().catch(() => null);
+        await Promise.all([
+          AsyncStorage.setItem(SESSION_USER_KEY, JSON.stringify(nextUser)).catch(() => null),
+          token ? AsyncStorage.setItem(TOKEN_KEY, token).catch(() => null) : AsyncStorage.removeItem(TOKEN_KEY).catch(() => null),
+        ]);
 
         setUser(nextUser);
       } finally {

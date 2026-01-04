@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { FileText, Gift, Home, LogOut, Package, Users } from 'lucide-react-native';
 import { signOut } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { auth, isFirebaseConfigured } from '@/Globalservices/firebase';
 import { useUserStore } from '@/Globalservices/userStore';
@@ -26,12 +27,17 @@ export default function AdminNavbar() {
   const clearUser = useUserStore((s) => s.clearUser);
 
   const handleLogout = async () => {
-    if (!isFirebaseConfigured) {
+    try {
+      if (isFirebaseConfigured) {
+        await signOut(auth);
+      }
+    } finally {
+      await Promise.all([
+        AsyncStorage.removeItem('sessionUser').catch(() => null),
+        AsyncStorage.removeItem('userToken').catch(() => null),
+      ]);
       clearUser();
-      return;
     }
-    await signOut(auth);
-    clearUser();
   };
 
   return (

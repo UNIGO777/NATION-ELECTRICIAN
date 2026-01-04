@@ -484,8 +484,9 @@ export default function RewardsScreen() {
       />
 
       <Modal visible={detailOpen} transparent animationType="slide" onRequestClose={closeDetails}>
-        <Pressable style={styles.backdrop} onPress={closeDetails}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <View style={styles.backdrop}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={closeDetails} />
+          <View style={styles.sheet}>
             <SafeAreaView edges={['top', 'bottom']} style={styles.sheetSafeArea}>
               <View style={styles.sheetHeader}>
                 <Text style={styles.sheetTitle} numberOfLines={2}>
@@ -547,8 +548,8 @@ export default function RewardsScreen() {
                 </Pressable>
               </View>
             </SafeAreaView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

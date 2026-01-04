@@ -1,11 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Pencil, Plus, Users } from 'lucide-react-native';
+import { Coins, MinusCircle, Pencil, Plus, Users, X } from 'lucide-react-native';
 import { useLocalSearchParams } from 'expo-router';
 
 import CreateUserModal from '@/AdminComponents/CreateUserModal';
-import { fetchUsersPage, setUserStatusAsAdmin, type AdminUserRecord, type UsersPageCursor } from '@/Globalservices/adminUserServices';
+import {
+  adjustUserWalletCoinsAsAdmin,
+  fetchWalletCoinsAsAdmin,
+  fetchUsersPage,
+  setUserStatusAsAdmin,
+  type AdminUserRecord,
+  type UsersPageCursor,
+} from '@/Globalservices/adminUserServices';
 import { useUserStore } from '@/Globalservices/userStore';
 
 export default function AdminUsers() {
@@ -22,6 +41,13 @@ export default function AdminUsers() {
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingUser, setEditingUser] = useState<AdminUserRecord | null>(null);
   const [blockingUid, setBlockingUid] = useState<string | null>(null);
+  const [walletUser, setWalletUser] = useState<AdminUserRecord | null>(null);
+  const [walletCoins, setWalletCoins] = useState<number | null>(null);
+  const [walletCoinsLoading, setWalletCoinsLoading] = useState(false);
+  const [walletAmountText, setWalletAmountText] = useState('');
+  const [walletReason, setWalletReason] = useState('');
+  const [walletErrorText, setWalletErrorText] = useState<string | null>(null);
+  const [walletSubmitting, setWalletSubmitting] = useState(false);
 
   const pageSize = 10;
 
@@ -112,11 +138,9 @@ export default function AdminUsers() {
 
   const columns = useMemo(
     () => [
-      { key: 'email', label: 'Email', flex: 2 },
-      { key: 'password', label: 'Password', flex: 2 },
-      { key: 'uid', label: 'UID', flex: 2 },
+      { key: 'email', label: 'Email', flex: 1 },
       { key: 'role', label: 'Role', flex: 1 },
-      { key: 'actions', label: '', flex: 1 },
+      { key: 'actions', label: 'Actions', flex: 1 },
     ],
     []
   );
@@ -151,6 +175,69 @@ export default function AdminUsers() {
     setModalMode('create');
   };
 
+  const closeWalletModal = () => {
+    setWalletSubmitting(false);
+    setWalletErrorText(null);
+    setWalletAmountText('');
+    setWalletReason('');
+    setWalletCoins(null);
+    setWalletCoinsLoading(false);
+    setWalletUser(null);
+  };
+
+  const openWalletModal = async (user: AdminUserRecord) => {
+    if (!isAdmin) return;
+    if (!user.uid) return;
+    setWalletUser(user);
+    setWalletCoins(null);
+    setWalletCoinsLoading(true);
+    setWalletAmountText('');
+    setWalletReason('');
+    setWalletErrorText(null);
+    try {
+      const coins = await fetchWalletCoinsAsAdmin(user.uid);
+      setWalletCoins(coins);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load wallet';
+      setWalletErrorText(message);
+    } finally {
+      setWalletCoinsLoading(false);
+    }
+  };
+
+  const submitWalletDeduction = async () => {
+    if (!isAdmin) return;
+    if (!walletUser?.uid) return;
+    if (walletSubmitting) return;
+
+    setWalletSubmitting(true);
+    setWalletErrorText(null);
+    try {
+      const raw = walletAmountText.trim();
+      const amount = Math.floor(Number(raw));
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error('Enter a valid coins amount.');
+      }
+
+      const result = await adjustUserWalletCoinsAsAdmin({
+        uid: walletUser.uid,
+        delta: -amount,
+        reason: walletReason,
+      });
+
+      Alert.alert(
+        'Wallet updated',
+        `Deducted ${Math.abs(result.appliedDelta)} coins.\nNew balance: ${result.afterCoins} coins.`
+      );
+      closeWalletModal();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update wallet';
+      setWalletErrorText(message);
+    } finally {
+      setWalletSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     if (params.openCreate !== '1') return;
     const nonce = typeof params.createNonce === 'string' ? params.createNonce : null;
@@ -160,15 +247,9 @@ export default function AdminUsers() {
   }, [params.createNonce, params.openCreate]);
 
   const renderRow = ({ item }: { item: AdminUserRecord }) => (
-    <View className="flex-row px-3 py-3 border-b border-neutral-100 bg-white">
-      <Text className="text-xs text-neutral-900" style={{ flex: 2 }} numberOfLines={1}>
-        {item.email ?? '-'}
-      </Text>
+    <View className="flex-row px-3 gap-5 py-3 border-b border-neutral-100 bg-white">
       <Text className="text-xs text-neutral-900" style={{ flex: 1 }} numberOfLines={1}>
-        ••••••••
-      </Text>
-      <Text className="text-xs text-neutral-900" style={{ flex: 2 }} numberOfLines={1}>
-        {item.uid}
+        {item.email ?? '-'}
       </Text>
       <Text className="text-xs text-neutral-700" style={{ flex: 1 }} numberOfLines={1}>
         {item.role ?? '-'}
@@ -181,6 +262,14 @@ export default function AdminUsers() {
             disabled={!isAdmin || Boolean(blockingUid)}
           >
             <Pencil color="#111827" size={16} />
+          </Pressable>
+
+          <Pressable
+            className="h-8 w-8 items-center justify-center rounded-lg bg-neutral-100"
+            onPress={() => openWalletModal(item)}
+            disabled={!isAdmin || Boolean(blockingUid) || walletSubmitting}
+          >
+            <MinusCircle color="#111827" size={16} />
           </Pressable>
 
           <Pressable
@@ -209,6 +298,79 @@ export default function AdminUsers() {
         mode={modalMode}
         initialUser={editingUser}
       />
+
+      <Modal visible={Boolean(walletUser)} animationType="slide" transparent onRequestClose={closeWalletModal}>
+        <Pressable style={styles.backdrop} onPress={closeWalletModal}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <View style={styles.headerContainer}>
+                <View style={styles.handleWrap}>
+                  <View style={styles.handle} />
+                </View>
+
+                <View style={styles.headerRow}>
+                  <View style={styles.headerIconWrap}>
+                    <Coins color="#dc2626" size={20} />
+                  </View>
+                  <View style={styles.headerTextWrap}>
+                    <Text style={styles.headerTitle}>Deduct Coins</Text>
+                    <Text style={styles.headerSubtitle}>
+                      {walletUser?.email ? walletUser.email : walletUser?.uid ? walletUser.uid : 'User'}
+                    </Text>
+                  </View>
+                  <Pressable onPress={closeWalletModal} style={styles.closeButton}>
+                    <X color="#6b7280" size={18} />
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.content}>
+                <Text style={styles.label}>Current Coins</Text>
+                <View style={styles.readonlyRow}>
+                  {walletCoinsLoading ? (
+                    <ActivityIndicator color="#dc2626" />
+                  ) : (
+                    <Text style={styles.readonlyValue}>{walletCoins ?? 0}</Text>
+                  )}
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label}>Coins to deduct</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 50"
+                    placeholderTextColor="#9ca3af"
+                    keyboardType="number-pad"
+                    value={walletAmountText}
+                    onChangeText={setWalletAmountText}
+                  />
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label}>Reason (optional)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Reason"
+                    placeholderTextColor="#9ca3af"
+                    value={walletReason}
+                    onChangeText={setWalletReason}
+                  />
+                </View>
+
+                {walletErrorText ? <Text style={styles.errorText}>{walletErrorText}</Text> : null}
+
+                <Pressable
+                  style={[styles.submitButton, walletSubmitting || walletCoinsLoading ? styles.disabled : null]}
+                  disabled={walletSubmitting || walletCoinsLoading}
+                  onPress={submitWalletDeduction}
+                >
+                  <Text style={styles.submitText}>{walletSubmitting ? 'Updating...' : 'Deduct Coins'}</Text>
+                </Pressable>
+              </View>
+            </KeyboardAvoidingView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <View className="px-6 pt-6 pb-4">
         <View className="flex-row items-center justify-between">
@@ -271,3 +433,133 @@ export default function AdminUsers() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  headerContainer: {
+    paddingTop: 6,
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  handleWrap: {
+    alignItems: 'center',
+  },
+  handle: {
+    height: 4,
+    width: 48,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+    marginBottom: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconWrap: {
+    height: 40,
+    width: 40,
+    borderRadius: 999,
+    backgroundColor: '#fef2f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fee2e2',
+  },
+  headerTextWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6b7280',
+  },
+  closeButton: {
+    height: 34,
+    width: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+  },
+  content: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 22,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#6b7280',
+    marginBottom: 6,
+  },
+  readonlyRow: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  readonlyValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  field: {
+    marginBottom: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    backgroundColor: '#ffffff',
+  },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  submitButton: {
+    marginTop: 6,
+    backgroundColor: '#dc2626',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  disabled: {
+    opacity: 0.6,
+  },
+});

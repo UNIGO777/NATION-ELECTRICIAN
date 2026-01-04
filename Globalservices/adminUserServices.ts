@@ -1,6 +1,7 @@
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -301,4 +302,117 @@ export const setUserStatusAsAdmin = async (params: { uid: string; status: 'activ
   }
 
   await setDoc(directRef, update, { merge: true });
+};
+
+export const fetchWalletCoinsAsAdmin = async (uid: string): Promise<number> => {
+  const currentUser = useUserStore.getState().user;
+  if (!currentUser?.isAdmin) {
+    throw new Error('Only admin can view wallets.');
+  }
+  if (!uid) {
+    throw new Error('User uid is required.');
+  }
+
+  const directRef = doc(db, 'Wallet', uid);
+  const directSnap = await getDoc(directRef);
+  const snap = directSnap.exists()
+    ? directSnap
+    : await (async () => {
+        const walletQuery = query(collection(db, 'Wallet'), where('uid', '==', uid), limit(1));
+        const results = await getDocs(walletQuery);
+        return results.empty ? directSnap : results.docs[0];
+      })();
+  if (!snap.exists()) return 0;
+  const data = snap.data() as Record<string, unknown>;
+  const rawCoins = typeof data.coins === 'number' ? data.coins : Number(data.coins);
+  return Number.isFinite(rawCoins) ? Math.max(0, Math.floor(rawCoins)) : 0;
+};
+
+export const adjustUserWalletCoinsAsAdmin = async (params: {
+  uid: string;
+  delta: number;
+  reason?: string;
+}): Promise<{ beforeCoins: number; afterCoins: number; appliedDelta: number }> => {
+  const currentUser = useUserStore.getState().user;
+  if (!currentUser?.isAdmin) {
+    throw new Error('Only admin can update wallets.');
+  }
+  if (!params.uid) {
+    throw new Error('User uid is required.');
+  }
+
+  const delta = Number.isFinite(params.delta) ? Math.trunc(params.delta) : 0;
+  if (delta === 0) {
+    throw new Error('Delta must be non-zero.');
+  }
+
+  const now = Date.now();
+  const directRef = doc(db, 'Wallet', params.uid);
+  const directSnap = await getDoc(directRef);
+  const walletDoc = directSnap.exists()
+    ? { ref: directRef, snap: directSnap }
+    : await (async () => {
+        const walletQuery = query(collection(db, 'Wallet'), where('uid', '==', params.uid), limit(1));
+        const results = await getDocs(walletQuery);
+        if (results.empty) {
+          return { ref: directRef, snap: directSnap };
+        }
+        return { ref: results.docs[0].ref, snap: results.docs[0] };
+      })();
+
+  const walletRef = walletDoc.ref;
+  const walletSnap = walletDoc.snap;
+  const walletData = walletSnap.exists() ? (walletSnap.data() as Record<string, unknown>) : null;
+  const rawBeforeCoins = walletData
+    ? typeof walletData.coins === 'number'
+      ? walletData.coins
+      : Number(walletData.coins)
+    : Number.NaN;
+  const beforeCoins = Number.isFinite(rawBeforeCoins) ? Math.max(0, Math.floor(rawBeforeCoins)) : 0;
+
+  const unclampedAfter = beforeCoins + delta;
+  const afterCoins = Math.max(0, Math.floor(unclampedAfter));
+  const appliedDelta = afterCoins - beforeCoins;
+
+  await setDoc(
+    walletRef,
+    {
+      uid: params.uid,
+      coins: afterCoins,
+      updatedAt: now,
+      updatedBy: currentUser.uid,
+      ...(walletSnap.exists() ? null : { createdAt: now }),
+    },
+    { merge: true }
+  );
+
+  await Promise.all([
+    addDoc(collection(db, 'History'), {
+      uid: params.uid,
+      title: 'Wallet Adjustment',
+      type: 'admin_wallet_adjust',
+      coinsDelta: appliedDelta,
+      createdAt: now,
+      createdBy: currentUser.uid,
+      reason: typeof params.reason === 'string' && params.reason.trim() ? params.reason.trim() : null,
+      beforeCoins,
+      afterCoins,
+    }).catch(() => null),
+    addDoc(collection(db, 'Notifications'), {
+      uid: params.uid,
+      title: 'Wallet Updated',
+      body:
+        appliedDelta < 0
+          ? `${Math.abs(appliedDelta)} coins were deducted from your wallet.`
+          : `${appliedDelta} coins were added to your wallet.`,
+      type: 'wallet_adjust',
+      coinsDelta: appliedDelta,
+      createdAt: now,
+      read: false,
+      createdBy: currentUser.uid,
+      reason: typeof params.reason === 'string' && params.reason.trim() ? params.reason.trim() : null,
+    }).catch(() => null),
+  ]);
+
+  return { beforeCoins, afterCoins, appliedDelta };
 };

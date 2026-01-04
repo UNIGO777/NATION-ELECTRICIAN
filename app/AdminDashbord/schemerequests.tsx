@@ -16,20 +16,23 @@ import { Redirect } from 'expo-router';
 import { ClipboardList, X } from 'lucide-react-native';
 
 import UserProfileModal from '@/AdminComponents/UserProfileModal';
-import { db } from '@/Globalservices/firebase';
+import { db, firebaseApp, firestoreDatabaseId } from '@/Globalservices/firebase';
+import { adjustUserWalletCoinsAsAdmin } from '@/Globalservices/adminUserServices';
 import { useUserStore } from '@/Globalservices/userStore';
 import {
   collection,
-  doc,
-  getDoc,
   getDocs,
   limit,
   orderBy,
   query,
-  setDoc,
-  updateDoc,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore/lite';
+import {
+  doc as docFull,
+  getFirestore as getFirestoreFull,
+  runTransaction,
+  setDoc as setDocFull,
+} from 'firebase/firestore';
 
 type SchemeRequestRecord = {
   uid?: string | null;
@@ -150,83 +153,144 @@ export default function AdminSchemeRequests() {
       setErrorText(null);
       try {
         const now = Date.now();
-        const schemeTitle = typeof selected.data.schemeTitle === 'string' ? selected.data.schemeTitle : 'Scheme';
-        const schemeId = typeof selected.data.schemeId === 'string' ? selected.data.schemeId : '';
-        const rawCoins =
+        const schemeTitleFallback = typeof selected.data.schemeTitle === 'string' ? selected.data.schemeTitle : 'Scheme';
+        const schemeIdFallback = typeof selected.data.schemeId === 'string' ? selected.data.schemeId : '';
+        const rawCoinsFallback =
           typeof selected.data.requiredCoins === 'number' ? selected.data.requiredCoins : Number(selected.data.requiredCoins);
-        const requiredCoins = Number.isFinite(rawCoins) ? Math.max(0, Math.floor(rawCoins)) : 0;
-
-        const title = decision === 'approved' ? 'Scheme Request Approved' : 'Scheme Request Rejected';
-        const body =
-          decision === 'approved'
-            ? `"${schemeTitle}" has been approved. You will get call from our side in next seven days.`
-            : `"${schemeTitle}" has been rejected. You will get call from our side in next seven days.`;
+        const requiredCoinsFallback = Number.isFinite(rawCoinsFallback) ? Math.max(0, Math.floor(rawCoinsFallback)) : 0;
 
         const notificationId = `${requestUid}_${selected.id}_scheme_${decision}`;
         const historyId = `${requestUid}_${selected.id}_scheme_${decision}`;
 
-        const requestRef = doc(db, 'SchemeRequests', selected.id);
-        const latest = await getDoc(requestRef);
-        if (!latest.exists()) {
-          setErrorText('Request not found.');
-          return;
-        }
-        const latestStatus = String((latest.data() as SchemeRequestRecord).status ?? 'pending').toLowerCase();
-        if (latestStatus !== 'pending') {
-          setErrorText('This request is already decided.');
-          return;
-        }
+        const fullDb = getFirestoreFull(firebaseApp, firestoreDatabaseId);
+        const requestRefFull = docFull(fullDb, 'SchemeRequests', selected.id);
+        const notificationRefFull = docFull(fullDb, 'Notifications', notificationId);
+        const historyRefFull = docFull(fullDb, 'History', historyId);
 
-        await updateDoc(requestRef, {
-          status: decision,
-          decidedBy: adminUid,
-          decidedAt: now,
-          updatedAt: now,
+        let schemeTitleFinal = schemeTitleFallback;
+        let schemeIdFinal = schemeIdFallback;
+        let requiredCoinsFinal = requiredCoinsFallback;
+
+        await runTransaction(fullDb, async (tx) => {
+          const latest = await tx.get(requestRefFull);
+          if (!latest.exists()) {
+            throw new Error('Request not found.');
+          }
+          const latestData = latest.data() as Record<string, unknown>;
+          const latestStatus = String(latestData.status ?? 'pending').toLowerCase();
+          if (latestStatus !== 'pending') {
+            throw new Error('This request is already decided.');
+          }
+
+          const schemeTitle =
+            typeof latestData.schemeTitle === 'string' ? (latestData.schemeTitle as string) : schemeTitleFallback;
+          const schemeId = typeof latestData.schemeId === 'string' ? (latestData.schemeId as string) : schemeIdFallback;
+          const rawCoins =
+            typeof latestData.requiredCoins === 'number' ? latestData.requiredCoins : Number(latestData.requiredCoins);
+          const requiredCoins = Number.isFinite(rawCoins) ? Math.max(0, Math.floor(rawCoins)) : requiredCoinsFallback;
+
+          schemeTitleFinal = schemeTitle;
+          schemeIdFinal = schemeId;
+          requiredCoinsFinal = requiredCoins;
+
+          tx.update(requestRefFull, {
+            status: decision,
+            decidedBy: adminUid,
+            decidedAt: now,
+            updatedAt: now,
+          });
         });
 
-        await setDoc(
-          doc(db, 'Notifications', notificationId),
-          {
-            uid: requestUid,
-            schemeRequestId: selected.id,
-            schemeId,
-            title,
-            body,
-            type: 'scheme_request_decision',
-            decision,
-            requiredCoins,
-            decidedBy: adminUid,
-            createdAt: now,
-            read: false,
-          },
-          { merge: true }
-        );
+        let refundedCoins = 0;
+        if (decision === 'rejected' && requiredCoinsFinal > 0) {
+          try {
+            const walletResult = await adjustUserWalletCoinsAsAdmin({
+              uid: requestUid,
+              delta: requiredCoinsFinal,
+              reason: `Scheme request rejected (${selected.id})`,
+            });
+            refundedCoins = walletResult.appliedDelta;
+          } catch (err) {
+            try {
+              await runTransaction(fullDb, async (tx) => {
+                const latest = await tx.get(requestRefFull);
+                if (!latest.exists()) return;
+                const latestData = latest.data() as Record<string, unknown>;
+                const latestStatus = String(latestData.status ?? 'pending').toLowerCase();
+                const latestDecidedBy = typeof latestData.decidedBy === 'string' ? latestData.decidedBy : null;
+                const latestDecidedAt = typeof latestData.decidedAt === 'number' ? latestData.decidedAt : null;
+                if (latestStatus !== decision) return;
+                if (latestDecidedBy !== adminUid) return;
+                if (latestDecidedAt !== now) return;
+                tx.update(requestRefFull, {
+                  status: 'pending',
+                  decidedBy: null,
+                  decidedAt: null,
+                  updatedAt: Date.now(),
+                });
+              });
+            } catch {
+              // ignore
+            }
+            throw err;
+          }
+        }
 
-        await setDoc(
-          doc(db, 'History', historyId),
-          {
-            uid: requestUid,
-            schemeRequestId: selected.id,
-            schemeId,
-            schemeTitle,
-            requiredCoins,
-            title:
-              decision === 'approved'
-                ? 'Scheme Request Approved - You will get call from our side in next seven days.'
-                : 'Scheme Request Rejected - You will get call from our side in next seven days.',
-            type: decision === 'approved' ? 'scheme_request_approved' : 'scheme_request_rejected',
-            coinsDelta: 0,
-            decidedBy: adminUid,
-            createdAt: now,
-            status: decision,
-          },
-          { merge: true }
-        );
+        const title = decision === 'approved' ? 'Scheme Request Approved' : 'Scheme Request Rejected';
+        const bodyBase =
+          decision === 'approved'
+            ? `"${schemeTitleFinal}" has been approved. You will get call from our side in next seven days.`
+            : `"${schemeTitleFinal}" has been rejected. You will get call from our side in next seven days.`;
+        const body =
+          decision === 'rejected' && refundedCoins > 0 ? `${bodyBase} Coins refunded: ${refundedCoins}.` : bodyBase;
+
+        await Promise.all([
+          setDocFull(
+            notificationRefFull,
+            {
+              uid: requestUid,
+              schemeRequestId: selected.id,
+              schemeId: schemeIdFinal,
+              title,
+              body,
+              type: 'scheme_request_decision',
+              decision,
+              requiredCoins: requiredCoinsFinal,
+              refundedCoins: decision === 'rejected' ? refundedCoins : 0,
+              decidedBy: adminUid,
+              createdAt: now,
+              read: false,
+            },
+            { merge: true }
+          ),
+          setDocFull(
+            historyRefFull,
+            {
+              uid: requestUid,
+              schemeRequestId: selected.id,
+              schemeId: schemeIdFinal,
+              schemeTitle: schemeTitleFinal,
+              requiredCoins: requiredCoinsFinal,
+              refundedCoins: decision === 'rejected' ? refundedCoins : 0,
+              title:
+                decision === 'approved'
+                  ? 'Scheme Request Approved - You will get call from our side in next seven days.'
+                  : 'Scheme Request Rejected - You will get call from our side in next seven days.',
+              type: decision === 'approved' ? 'scheme_request_approved' : 'scheme_request_rejected',
+              coinsDelta: decision === 'rejected' ? refundedCoins : 0,
+              decidedBy: adminUid,
+              createdAt: now,
+              status: decision,
+            },
+            { merge: true }
+          ),
+        ]);
 
         await fetchRequests();
         closeDetails();
-      } catch {
-        setErrorText('Unable to update request right now.');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to update request right now.';
+        setErrorText(message);
       } finally {
         setDecisionSubmitting(false);
       }
@@ -234,8 +298,12 @@ export default function AdminSchemeRequests() {
     [adminUid, closeDetails, decisionSubmitting, fetchRequests, selected]
   );
 
-  if (!user) return <Redirect href="/login" />;
-  if (!user.isAdmin) return <Redirect href="/(tabs)" />;
+  if (!user) {
+    return <Redirect href="/login" />;
+  }
+  if (!user.isAdmin) {
+    return <Redirect href="/(tabs)" />;
+  }
 
   return (
     <SafeAreaView edges={[]} style={styles.container}>

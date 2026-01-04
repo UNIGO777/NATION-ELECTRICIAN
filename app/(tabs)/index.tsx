@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, Coins, Gift, Package, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 
 import NotificationsPopup from '@/components/user/NotificationsPopup';
 import { db, storage } from '@/Globalservices/firebase';
@@ -57,6 +58,7 @@ type PosterDoc = {
 const PAGE_SIZE = 10;
 
 export default function HomeScreen() {
+  const router = useRouter();
   const user = useUserStore((s) => s.user);
   const uid = user?.uid ?? null;
 
@@ -393,6 +395,14 @@ export default function HomeScreen() {
     return walletCoins.toLocaleString();
   }, [walletCoins]);
 
+  const goToProducts = useCallback(() => {
+    router.push('/(tabs)/explore');
+  }, [router]);
+
+  const goToRewards = useCallback(() => {
+    router.push('/(tabs)/rewards');
+  }, [router]);
+
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <ScrollView
@@ -438,11 +448,11 @@ export default function HomeScreen() {
               <Upload color="#dc2626" size={18} />
               <Text style={styles.quickLabel}>Upload</Text>
             </Pressable>
-            <Pressable style={styles.quickButton}>
+            <Pressable style={styles.quickButton} onPress={goToProducts}>
               <Package color="#dc2626" size={18} />
               <Text style={styles.quickLabel}>Products</Text>
             </Pressable>
-            <Pressable style={styles.quickButton}>
+            <Pressable style={styles.quickButton} onPress={goToRewards}>
               <Gift color="#dc2626" size={18} />
               <Text style={styles.quickLabel}>Gifts</Text>
             </Pressable>

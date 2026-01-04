@@ -2,7 +2,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, View, Image, TextInput, Pressable, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUserStore } from '@/Globalservices/userStore';
+import { auth } from '@/Globalservices/firebase';
 import { getLoginErrorMessage, loginWithEmailPassword } from '@/Globalservices/loginServices';
 
 export default function Login() {
@@ -19,6 +21,11 @@ export default function Login() {
     try {
       const result = await loginWithEmailPassword({ email, password });
       setUser(result.user);
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      await Promise.all([
+        AsyncStorage.setItem('sessionUser', JSON.stringify(result.user)),
+        token ? AsyncStorage.setItem('userToken', token) : AsyncStorage.removeItem('userToken'),
+      ]);
       router.replace(result.route);
     } catch (err) {
       setErrorText(getLoginErrorMessage(err));

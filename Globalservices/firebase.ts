@@ -1,7 +1,8 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, initializeAuth, inMemoryPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore/lite';
 import { getStorage } from 'firebase/storage';
+import { Platform } from 'react-native';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? '',
@@ -20,7 +21,16 @@ export const isFirebaseConfigured = Boolean(
 
 export const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
-export const auth = getAuth(firebaseApp);
+export const auth =
+  Platform.OS === 'web'
+    ? getAuth(firebaseApp)
+    : (() => {
+        try {
+          return initializeAuth(firebaseApp, { persistence: inMemoryPersistence });
+        } catch {
+          return getAuth(firebaseApp);
+        }
+      })();
 export const db = getFirestore(firebaseApp, firestoreDatabaseId);
 export const storage = getStorage(firebaseApp);
 
@@ -34,4 +44,14 @@ const getSecondaryApp = () => {
   }
 };
 
-export const secondaryAuth = getAuth(getSecondaryApp());
+const secondaryApp = getSecondaryApp();
+export const secondaryAuth =
+  Platform.OS === 'web'
+    ? getAuth(secondaryApp)
+    : (() => {
+        try {
+          return initializeAuth(secondaryApp, { persistence: inMemoryPersistence });
+        } catch {
+          return getAuth(secondaryApp);
+        }
+      })();
