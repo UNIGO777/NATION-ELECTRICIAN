@@ -1,4 +1,4 @@
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore/lite';
 import { auth, db, firestoreDatabaseId, isFirebaseConfigured } from '@/Globalservices/firebase';
 import type { UserData } from '@/Globalservices/userStore';
@@ -22,6 +22,7 @@ export const getLoginErrorMessage = (err: unknown) => {
   const rawMessageLower = rawMessage.toLowerCase();
 
   if (err instanceof LoginServiceError) return err.message;
+  if (maybeCode.includes('auth/user-disabled')) return 'Your account has been blocked. Contact admin.';
   if (maybeCode.includes('permission-denied')) return 'Permission denied. Update Firestore rules for this user.';
   if (rawMessageLower.includes('the database (default) does not exist')) {
     return firestoreDatabaseId !== '(default)'
@@ -67,6 +68,16 @@ export const loginWithEmailPassword = async (params: { email: string; password: 
 
   if (!userDoc) {
     throw new LoginServiceError('user-not-found', 'User record not found. Contact admin for access.');
+  }
+
+  const isBlocked =
+    userDoc.blocked === true ||
+    userDoc.isBlocked === true ||
+    (typeof userDoc.status === 'string' && userDoc.status.toLowerCase() === 'blocked') ||
+    (typeof userDoc.accountStatus === 'string' && userDoc.accountStatus.toLowerCase() === 'blocked');
+  if (isBlocked) {
+    await signOut(auth).catch(() => null);
+    throw new LoginServiceError('blocked', 'Your account has been blocked. Contact admin.');
   }
 
   const isAdmin =

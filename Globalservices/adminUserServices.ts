@@ -2,6 +2,7 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -11,6 +12,7 @@ import {
   setDoc,
   startAfter,
   type QueryDocumentSnapshot,
+  where,
 } from 'firebase/firestore/lite';
 
 import { db, firebaseApp, secondaryAuth } from '@/Globalservices/firebase';
@@ -22,6 +24,7 @@ export type AdminUserRecord = {
   role?: 'admin' | 'user' | null;
   fullName?: string | null;
   mobileNumber?: string | null;
+  status?: string | null;
 };
 
 export type UsersPageCursor = QueryDocumentSnapshot | null;
@@ -43,6 +46,26 @@ export const fetchBillsCount = async (): Promise<number> => {
   }
 
   const snap = await getDocs(collection(db, 'Bills'));
+  return snap.size;
+};
+
+export const fetchProductsCount = async (): Promise<number> => {
+  const currentUser = useUserStore.getState().user;
+  if (!currentUser?.isAdmin) {
+    throw new Error('Only admin can view product count.');
+  }
+
+  const snap = await getDocs(collection(db, 'Products'));
+  return snap.size;
+};
+
+export const fetchSchemeRequestsCount = async (): Promise<number> => {
+  const currentUser = useUserStore.getState().user;
+  if (!currentUser?.isAdmin) {
+    throw new Error('Only admin can view scheme request count.');
+  }
+
+  const snap = await getDocs(collection(db, 'SchemeRequests'));
   return snap.size;
 };
 
@@ -88,12 +111,15 @@ export const fetchUsersPage = async (params: {
     const data = d.data() as Record<string, unknown>;
     const rawRole = ((data.role as string) ?? (data.userType as string) ?? '').toLowerCase();
     const role = rawRole === 'admin' ? 'admin' : rawRole === 'user' ? 'user' : null;
+    const rawStatus = typeof data.status === 'string' ? data.status.trim().toLowerCase() : '';
+    const status = rawStatus === 'blocked' ? 'blocked' : 'active';
     return {
       uid: (data.uid as string) ?? d.id,
       email: (data.email as string) ?? null,
       role,
       fullName: (data.fullName as string) ?? (data.name as string) ?? null,
       mobileNumber: (data.mobileNumber as string) ?? (data.mobile as string) ?? null,
+      status,
     } satisfies AdminUserRecord;
   });
 
@@ -130,6 +156,7 @@ export const createUserAsAdmin = async (params: {
     mobileNumber: params.mobileNumber,
     role: params.role,
     isAdmin: params.role === 'admin',
+    status: 'active',
     createdAt: Date.now(),
   });
 
@@ -231,4 +258,47 @@ export const deleteUserAsAdmin = async (uid: string): Promise<void> => {
   const functions = getFunctions(firebaseApp);
   const call = httpsCallable<{ uid: string }, { ok?: boolean }>(functions, 'adminDeleteUser');
   await call({ uid });
+  await Promise.all([
+    deleteDoc(doc(db, 'User', uid)).catch(() => null),
+    deleteDoc(doc(db, 'Wallet', uid)).catch(() => null),
+  ]);
+};
+
+export const setUserStatusAsAdmin = async (params: { uid: string; status: 'active' | 'blocked' }): Promise<void> => {
+  const currentUser = useUserStore.getState().user;
+  if (!currentUser?.isAdmin) {
+    throw new Error('Only admin can update users.');
+  }
+  const uid = params.uid;
+  if (!uid) {
+    throw new Error('User uid is required.');
+  }
+  if (uid === currentUser.uid) {
+    throw new Error('You cannot update your own account.');
+  }
+
+  const now = Date.now();
+  const update = {
+    uid,
+    status: params.status,
+    updatedAt: now,
+    updatedBy: currentUser.uid,
+  };
+
+  const directRef = doc(db, 'User', uid);
+  const directSnap = await getDoc(directRef);
+
+  if (directSnap.exists()) {
+    await setDoc(directRef, update, { merge: true });
+    return;
+  }
+
+  const q = query(collection(db, 'User'), where('uid', '==', uid), limit(1));
+  const results = await getDocs(q);
+  if (!results.empty) {
+    await setDoc(results.docs[0].ref, update, { merge: true });
+    return;
+  }
+
+  await setDoc(directRef, update, { merge: true });
 };

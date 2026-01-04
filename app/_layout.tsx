@@ -5,8 +5,9 @@ import 'react-native-reanimated';
 import './globals.css';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore/lite';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -25,6 +26,7 @@ export default function RootLayout() {
   const setUser = useUserStore((s) => s.setUser);
   const clearUser = useUserStore((s) => s.clearUser);
   const [isSessionReady, setIsSessionReady] = useState(false);
+  const blockedAlertUidRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -35,6 +37,7 @@ export default function RootLayout() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (!firebaseUser) {
+          blockedAlertUidRef.current = null;
           clearUser();
           return;
         }
@@ -51,6 +54,21 @@ export default function RootLayout() {
           if (!results.empty) {
             userDoc = results.docs[0].data() as Record<string, unknown>;
           }
+        }
+
+        const isBlocked =
+          userDoc?.blocked === true ||
+          userDoc?.isBlocked === true ||
+          (typeof userDoc?.status === 'string' && userDoc.status.toLowerCase() === 'blocked') ||
+          (typeof userDoc?.accountStatus === 'string' && userDoc.accountStatus.toLowerCase() === 'blocked');
+        if (isBlocked) {
+          if (blockedAlertUidRef.current !== firebaseUser.uid) {
+            blockedAlertUidRef.current = firebaseUser.uid;
+            Alert.alert('Account Blocked', 'Your account has been blocked. Contact admin for assistance.');
+          }
+          await signOut(auth).catch(() => null);
+          clearUser();
+          return;
         }
 
         const isAdmin =

@@ -16,12 +16,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Gift, ImagePlus, Pencil, Plus, RefreshCcw, X } from 'lucide-react-native';
+import { Gift, ImagePlus, Pencil, Plus, RefreshCcw, Trash2, X } from 'lucide-react-native';
 
 import { db, storage } from '@/Globalservices/firebase';
 import { useUserStore } from '@/Globalservices/userStore';
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   orderBy,
@@ -331,13 +332,44 @@ export default function AdminSchemes() {
     return modalMode === 'create' ? 'Create Scheme' : 'Update Scheme';
   }, [modalMode, submitting]);
 
+  const deleteScheme = useCallback(() => {
+    if (!adminUid) return;
+    if (submitting) return;
+    if (modalMode !== 'edit') return;
+    if (!editingId) {
+      setErrorText('Scheme id missing.');
+      return;
+    }
+
+    Alert.alert('Delete scheme?', 'This action cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setSubmitting(true);
+          setErrorText(null);
+          try {
+            await deleteDoc(doc(db, 'Schemes', editingId));
+            await fetchSchemes();
+            closeModal();
+          } catch {
+            setErrorText('Unable to delete scheme right now.');
+          } finally {
+            setSubmitting(false);
+          }
+        },
+      },
+    ]);
+  }, [adminUid, closeModal, editingId, fetchSchemes, modalMode, submitting]);
+
   const previewUri = pickedPosterUri ?? existingPosterUrl ?? null;
 
   if (!user) return <Redirect href="/login" />;
   if (!user.isAdmin) return <Redirect href="/(tabs)" />;
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.container}>
+    <SafeAreaView edges={[]} style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.pageTitle}>Schemes</Text>
         <View style={styles.headerActions}>
@@ -514,9 +546,25 @@ export default function AdminSchemes() {
                 </ScrollView>
 
                 <View style={styles.footer}>
-                  <Pressable style={[styles.submitButton, submitting ? styles.disabled : null]} onPress={submit} disabled={submitting}>
-                    <Text style={styles.submitText}>{submitLabel}</Text>
-                  </Pressable>
+                  <View style={styles.footerRow}>
+                    {modalMode === 'edit' ? (
+                      <Pressable
+                        style={[styles.deleteButton, styles.footerButton, submitting ? styles.disabled : null]}
+                        onPress={deleteScheme}
+                        disabled={submitting}
+                      >
+                        <Trash2 size={16} color="#ffffff" />
+                        <Text style={styles.footerButtonText}>Delete</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      style={[styles.submitButton, styles.footerButton, submitting ? styles.disabled : null]}
+                      onPress={submit}
+                      disabled={submitting}
+                    >
+                      <Text style={styles.footerButtonText}>{submitLabel}</Text>
+                    </Pressable>
+                  </View>
                 </View>
               </KeyboardAvoidingView>
             </SafeAreaView>
@@ -871,13 +919,27 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 16,
   },
-  submitButton: {
-    backgroundColor: '#dc2626',
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  footerButton: {
+    flex: 1,
     paddingVertical: 14,
     borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
-  submitText: {
+  submitButton: {
+    backgroundColor: '#dc2626',
+  },
+  deleteButton: {
+    backgroundColor: '#111827',
+  },
+  footerButtonText: {
     color: '#ffffff',
     fontSize: 15,
     fontWeight: '800',

@@ -228,7 +228,7 @@ export default function SearchScreen() {
   const selectedSchemeRewards = useMemo(() => normalizeRewardItems(selectedScheme?.data.rewardItems), [selectedScheme?.data.rewardItems]);
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTextWrap}>
           <Text style={styles.title}>Search</Text>

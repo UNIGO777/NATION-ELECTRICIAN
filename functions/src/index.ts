@@ -505,3 +505,79 @@ export const adminDeleteUser = functions.https.onCall(async (data: unknown, cont
 
   return { ok: true, uid: targetUid, deletedAuth, authError, counts };
 });
+
+export const adminSetUserBlocked = functions.https.onCall(async (data: unknown, context: functions.https.CallableContext) => {
+  const callerUid = context.auth?.uid ?? null;
+  if (!callerUid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+  }
+
+  const payload = data as Record<string, unknown> | null;
+  const targetUid = payload?.uid;
+  const blockedRaw = payload?.blocked;
+
+  if (typeof targetUid !== 'string' || !targetUid.trim()) {
+    throw new functions.https.HttpsError('invalid-argument', 'uid is required.');
+  }
+  if (targetUid === callerUid) {
+    throw new functions.https.HttpsError('failed-precondition', 'You cannot block your own account.');
+  }
+
+  const blocked = blockedRaw === true;
+
+  const db = getFirestore();
+  const allowed = await isAdminUid({ db, uid: callerUid });
+  if (!allowed) {
+    throw new functions.https.HttpsError('permission-denied', 'Only admin can block users.');
+  }
+
+  const now = Date.now();
+
+  let authUpdated = false;
+  let authError: string | null = null;
+  try {
+    await getAuth().updateUser(targetUid, { disabled: blocked });
+    authUpdated = true;
+  } catch (err) {
+    const code = typeof (err as { code?: unknown }).code === 'string' ? String((err as { code: string }).code) : '';
+    const message = err instanceof Error ? err.message : 'Unable to update auth user.';
+    authError = message;
+    if (!code.includes('auth/user-not-found')) {
+      throw new functions.https.HttpsError('internal', message);
+    }
+  }
+
+  const userRef = db.collection('User').doc(targetUid);
+  const snap = await userRef.get();
+
+  const updateBase: Record<string, unknown> = {
+    blocked,
+    updatedAt: now,
+    updatedBy: callerUid,
+  };
+
+  if (blocked) {
+    updateBase.blockedAt = now;
+    updateBase.blockedBy = callerUid;
+    updateBase.unblockedAt = FieldValue.delete();
+    updateBase.unblockedBy = FieldValue.delete();
+  } else {
+    updateBase.unblockedAt = now;
+    updateBase.unblockedBy = callerUid;
+    updateBase.blockedAt = FieldValue.delete();
+    updateBase.blockedBy = FieldValue.delete();
+  }
+
+  if (snap.exists) {
+    await userRef.set(updateBase, { merge: true });
+  } else {
+    const altSnap = await db.collection('User').where('uid', '==', targetUid).limit(1).get();
+    if (!altSnap.empty) {
+      await altSnap.docs[0].ref.set(updateBase, { merge: true });
+    } else {
+      await userRef.set({ uid: targetUid, ...updateBase }, { merge: true });
+    }
+  }
+
+  return { ok: true, uid: targetUid, blocked, authUpdated, authError };
+});

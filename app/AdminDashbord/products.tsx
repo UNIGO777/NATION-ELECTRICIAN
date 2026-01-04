@@ -16,12 +16,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { ImagePlus, PackagePlus, Pencil, RefreshCcw, Search, X } from 'lucide-react-native';
+import { ImagePlus, PackagePlus, Pencil, RefreshCcw, Search, Trash2, X } from 'lucide-react-native';
 
 import { db, storage } from '@/Globalservices/firebase';
 import { useUserStore } from '@/Globalservices/userStore';
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   orderBy,
@@ -237,6 +238,37 @@ export default function AdminProducts() {
     return modalMode === 'create' ? 'Create Product' : 'Update Product';
   }, [modalMode, submitting]);
 
+  const deleteProduct = useCallback(() => {
+    if (!adminUid) return;
+    if (submitting) return;
+    if (modalMode !== 'edit') return;
+    if (!editingId) {
+      setErrorText('Product id missing.');
+      return;
+    }
+
+    Alert.alert('Delete product?', 'This action cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setSubmitting(true);
+          setErrorText(null);
+          try {
+            await deleteDoc(doc(db, 'Products', editingId));
+            await fetchProducts();
+            closeModal();
+          } catch {
+            setErrorText('Unable to delete product right now.');
+          } finally {
+            setSubmitting(false);
+          }
+        },
+      },
+    ]);
+  }, [adminUid, closeModal, editingId, fetchProducts, modalMode, submitting]);
+
   const previewUri = pickedImageUri ?? existingImageUrl ?? null;
 
   const filteredRows = useMemo(() => {
@@ -430,9 +462,25 @@ export default function AdminProducts() {
                 </ScrollView>
 
                 <View style={styles.footer}>
-                  <Pressable style={[styles.submitButton, submitting ? styles.disabled : null]} onPress={submit} disabled={submitting}>
-                    <Text style={styles.submitText}>{submitLabel}</Text>
-                  </Pressable>
+                  <View style={styles.footerRow}>
+                    {modalMode === 'edit' ? (
+                      <Pressable
+                        style={[styles.deleteButton, styles.footerButton, submitting ? styles.disabled : null]}
+                        onPress={deleteProduct}
+                        disabled={submitting}
+                      >
+                        <Trash2 size={16} color="#ffffff" />
+                        <Text style={styles.footerButtonText}>Delete</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      style={[styles.submitButton, styles.footerButton, submitting ? styles.disabled : null]}
+                      onPress={submit}
+                      disabled={submitting}
+                    >
+                      <Text style={styles.footerButtonText}>{submitLabel}</Text>
+                    </Pressable>
+                  </View>
                 </View>
               </KeyboardAvoidingView>
             </SafeAreaView>
@@ -759,13 +807,27 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 16,
   },
-  submitButton: {
-    backgroundColor: '#dc2626',
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  footerButton: {
+    flex: 1,
     paddingVertical: 14,
     borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
-  submitText: {
+  submitButton: {
+    backgroundColor: '#dc2626',
+  },
+  deleteButton: {
+    backgroundColor: '#111827',
+  },
+  footerButtonText: {
     color: '#ffffff',
     fontSize: 15,
     fontWeight: '800',

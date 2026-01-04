@@ -118,7 +118,7 @@ export default function ProductsScreen() {
   }, [selectedRow?.data.imageUrl]);
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={

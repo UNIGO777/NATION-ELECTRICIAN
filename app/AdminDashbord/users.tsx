@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Pencil, Plus, Trash2, Users } from 'lucide-react-native';
+import { Pencil, Plus, Users } from 'lucide-react-native';
 import { useLocalSearchParams } from 'expo-router';
 
 import CreateUserModal from '@/AdminComponents/CreateUserModal';
-import { deleteUserAsAdmin, fetchUsersPage, type AdminUserRecord, type UsersPageCursor } from '@/Globalservices/adminUserServices';
+import { fetchUsersPage, setUserStatusAsAdmin, type AdminUserRecord, type UsersPageCursor } from '@/Globalservices/adminUserServices';
 import { useUserStore } from '@/Globalservices/userStore';
 
 export default function AdminUsers() {
@@ -21,7 +21,7 @@ export default function AdminUsers() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingUser, setEditingUser] = useState<AdminUserRecord | null>(null);
-  const [deletingUid, setDeletingUid] = useState<string | null>(null);
+  const [blockingUid, setBlockingUid] = useState<string | null>(null);
 
   const pageSize = 10;
 
@@ -68,38 +68,42 @@ export default function AdminUsers() {
     }
   }, [cursor, hasMore, isAdmin, isLoading, isRefreshing]);
 
-  const onDeleteUser = useCallback(
+  const onToggleBlocked = useCallback(
     (user: AdminUserRecord) => {
       if (!isAdmin) return;
       if (!user.uid) return;
       if (user.uid === currentUser?.uid) {
-        Alert.alert('Not allowed', 'You cannot delete your own account.');
+        Alert.alert('Not allowed', 'You cannot block your own account.');
         return;
       }
-      if (deletingUid) return;
+      if (blockingUid) return;
 
-      Alert.alert('Delete user?', 'This will permanently delete this user and their data.', [
+      const currentStatus = user.status ?? 'active';
+      const nextStatus: 'active' | 'blocked' = currentStatus === 'blocked' ? 'active' : 'blocked';
+
+      Alert.alert(nextStatus === 'blocked' ? 'Block user?' : 'Unblock user?', nextStatus === 'blocked' ? 'This user will not be able to sign in.' : 'This user will be able to sign in again.', [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: nextStatus === 'blocked' ? 'Block' : 'Unblock',
+          style: nextStatus === 'blocked' ? 'destructive' : 'default',
           onPress: async () => {
-            setDeletingUid(user.uid);
+            setBlockingUid(user.uid);
             setErrorText(null);
             try {
-              await deleteUserAsAdmin(user.uid);
+              await setUserStatusAsAdmin({ uid: user.uid, status: nextStatus });
+              setUsers((prev) => prev.map((u) => (u.uid === user.uid ? { ...u, status: nextStatus } : u)));
               await loadFirstPage();
             } catch (err) {
-              const message = err instanceof Error ? err.message : 'Failed to delete user';
+              const message = err instanceof Error ? err.message : 'Failed to update user';
               setErrorText(message);
             } finally {
-              setDeletingUid(null);
+              setBlockingUid(null);
             }
           },
         },
       ]);
     },
-    [currentUser?.uid, deletingUid, isAdmin, loadFirstPage]
+    [blockingUid, currentUser?.uid, isAdmin, loadFirstPage]
   );
 
   useEffect(() => {
@@ -174,17 +178,22 @@ export default function AdminUsers() {
           <Pressable
             className="h-8 w-8 items-center justify-center rounded-lg bg-neutral-100"
             onPress={() => openEdit(item)}
-            disabled={!isAdmin || Boolean(deletingUid)}
+            disabled={!isAdmin || Boolean(blockingUid)}
           >
             <Pencil color="#111827" size={16} />
           </Pressable>
 
           <Pressable
-            className="h-8 w-8 items-center justify-center rounded-lg bg-red-50"
-            onPress={() => onDeleteUser(item)}
-            disabled={!isAdmin || Boolean(deletingUid) || item.uid === currentUser?.uid}
+            className="h-8 items-center justify-center rounded-lg px-3"
+            style={{ backgroundColor: item.status === 'blocked' ? '#dc2626' : '#111827' }}
+            onPress={() => onToggleBlocked(item)}
+            disabled={!isAdmin || Boolean(blockingUid) || item.uid === currentUser?.uid}
           >
-            {deletingUid === item.uid ? <ActivityIndicator size="small" /> : <Trash2 color="#dc2626" size={16} />}
+            {blockingUid === item.uid ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text className="text-xs font-semibold text-white">{item.status === 'blocked' ? 'Unblock' : 'Block'}</Text>
+            )}
           </Pressable>
         </View>
       </View>
@@ -192,7 +201,7 @@ export default function AdminUsers() {
   );
 
   return (
-    <SafeAreaView edges={['bottom']} className="flex-1 bg-white">
+    <SafeAreaView edges={[]} className="flex-1 bg-white">
       <CreateUserModal
         visible={isModalOpen}
         onClose={closeModal}

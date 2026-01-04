@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -110,13 +110,6 @@ export default function AdminSchemeRequests() {
       setIsRefreshing(false);
     }
   }, [fetchRequests, isAdmin, isRefreshing]);
-
-  const counts = useMemo(() => {
-    const pending = rows.filter((r) => (r.data.status ?? 'pending') === 'pending').length;
-    const approved = rows.filter((r) => (r.data.status ?? 'pending') === 'approved').length;
-    const rejected = rows.filter((r) => (r.data.status ?? 'pending') === 'rejected').length;
-    return { pending, approved, rejected };
-  }, [rows]);
 
   const openDetails = useCallback((row: SchemeRequestRow) => {
     setSelected(row);
@@ -245,7 +238,7 @@ export default function AdminSchemeRequests() {
   if (!user.isAdmin) return <Redirect href="/(tabs)" />;
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.container}>
+    <SafeAreaView edges={[]} style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
@@ -271,7 +264,7 @@ export default function AdminSchemeRequests() {
             onPress={() => setFilter('pending')}
           >
             <Text style={[styles.filterText, filter === 'pending' ? styles.filterTextActive : null]}>
-              Pending ({counts.pending})
+              Pending
             </Text>
           </Pressable>
           <Pressable
@@ -279,7 +272,7 @@ export default function AdminSchemeRequests() {
             onPress={() => setFilter('approved')}
           >
             <Text style={[styles.filterText, filter === 'approved' ? styles.filterTextActive : null]}>
-              Approved ({counts.approved})
+              Approved
             </Text>
           </Pressable>
           <Pressable
@@ -287,7 +280,7 @@ export default function AdminSchemeRequests() {
             onPress={() => setFilter('rejected')}
           >
             <Text style={[styles.filterText, filter === 'rejected' ? styles.filterTextActive : null]}>
-              Rejected ({counts.rejected})
+              Rejected
             </Text>
           </Pressable>
           <Pressable

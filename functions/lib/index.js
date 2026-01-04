@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adminDeleteUser = exports.processBillStatusChange = exports.notifyUserOnSchemeRequestDecision = exports.notifyAdminsOnSchemeRequest = exports.notifyAdminsOnBillUpload = void 0;
+exports.adminSetUserBlocked = exports.adminDeleteUser = exports.processBillStatusChange = exports.notifyUserOnSchemeRequestDecision = exports.notifyAdminsOnSchemeRequest = exports.notifyAdminsOnBillUpload = void 0;
 const app_1 = require("firebase-admin/app");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
@@ -461,4 +461,72 @@ exports.adminDeleteUser = functions.https.onCall(async (data, context) => {
         authError = message;
     }
     return { ok: true, uid: targetUid, deletedAuth, authError, counts };
+});
+exports.adminSetUserBlocked = functions.https.onCall(async (data, context) => {
+    const callerUid = context.auth?.uid ?? null;
+    if (!callerUid) {
+        throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+    }
+    const payload = data;
+    const targetUid = payload?.uid;
+    const blockedRaw = payload?.blocked;
+    if (typeof targetUid !== 'string' || !targetUid.trim()) {
+        throw new functions.https.HttpsError('invalid-argument', 'uid is required.');
+    }
+    if (targetUid === callerUid) {
+        throw new functions.https.HttpsError('failed-precondition', 'You cannot block your own account.');
+    }
+    const blocked = blockedRaw === true;
+    const db = (0, firestore_1.getFirestore)();
+    const allowed = await isAdminUid({ db, uid: callerUid });
+    if (!allowed) {
+        throw new functions.https.HttpsError('permission-denied', 'Only admin can block users.');
+    }
+    const now = Date.now();
+    let authUpdated = false;
+    let authError = null;
+    try {
+        await (0, auth_1.getAuth)().updateUser(targetUid, { disabled: blocked });
+        authUpdated = true;
+    }
+    catch (err) {
+        const code = typeof err.code === 'string' ? String(err.code) : '';
+        const message = err instanceof Error ? err.message : 'Unable to update auth user.';
+        authError = message;
+        if (!code.includes('auth/user-not-found')) {
+            throw new functions.https.HttpsError('internal', message);
+        }
+    }
+    const userRef = db.collection('User').doc(targetUid);
+    const snap = await userRef.get();
+    const updateBase = {
+        blocked,
+        updatedAt: now,
+        updatedBy: callerUid,
+    };
+    if (blocked) {
+        updateBase.blockedAt = now;
+        updateBase.blockedBy = callerUid;
+        updateBase.unblockedAt = firestore_1.FieldValue.delete();
+        updateBase.unblockedBy = firestore_1.FieldValue.delete();
+    }
+    else {
+        updateBase.unblockedAt = now;
+        updateBase.unblockedBy = callerUid;
+        updateBase.blockedAt = firestore_1.FieldValue.delete();
+        updateBase.blockedBy = firestore_1.FieldValue.delete();
+    }
+    if (snap.exists) {
+        await userRef.set(updateBase, { merge: true });
+    }
+    else {
+        const altSnap = await db.collection('User').where('uid', '==', targetUid).limit(1).get();
+        if (!altSnap.empty) {
+            await altSnap.docs[0].ref.set(updateBase, { merge: true });
+        }
+        else {
+            await userRef.set({ uid: targetUid, ...updateBase }, { merge: true });
+        }
+    }
+    return { ok: true, uid: targetUid, blocked, authUpdated, authError };
 });

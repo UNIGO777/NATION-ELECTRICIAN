@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { Package, ShoppingCart, Users, UserPlus, PackagePlus, Settings, FileSearch, FileText } from 'lucide-react-native';
+import { ClipboardList, FileText, Package, Users, UserPlus, PackagePlus } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
-import { fetchBillsCount, fetchUsersCount } from '@/Globalservices/adminUserServices';
+import { fetchBillsCount, fetchProductsCount, fetchSchemeRequestsCount, fetchUsersCount } from '@/Globalservices/adminUserServices';
 import { db, storage } from '@/Globalservices/firebase';
 import { collection, deleteDoc, doc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore/lite';
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
@@ -21,6 +21,8 @@ type PosterDoc = {
 const AdminHomePage: React.FC = () => {
   const [usersCount, setUsersCount] = useState<number | null>(null);
   const [billsCount, setBillsCount] = useState<number | null>(null);
+  const [productsCount, setProductsCount] = useState<number | null>(null);
+  const [schemeRequestsCount, setSchemeRequestsCount] = useState<number | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [posterModalOpen, setPosterModalOpen] = useState(false);
   const [posterImageUri, setPosterImageUri] = useState<string | null>(null);
@@ -31,11 +33,13 @@ const AdminHomePage: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    Promise.all([fetchUsersCount(), fetchBillsCount()])
-      .then(([userCount, billCount]) => {
+    Promise.all([fetchUsersCount(), fetchBillsCount(), fetchProductsCount(), fetchSchemeRequestsCount()])
+      .then(([userCount, billCount, productCount, schemeCount]) => {
         if (!isMounted) return;
         setUsersCount(userCount);
         setBillsCount(billCount);
+        setProductsCount(productCount);
+        setSchemeRequestsCount(schemeCount);
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -47,36 +51,42 @@ const AdminHomePage: React.FC = () => {
     };
   }, []);
 
+  const goToUsers = useCallback(() => {
+    router.push('/AdminDashbord/users');
+  }, []);
+
+  const goToUsersAndOpenCreate = useCallback(() => {
+    router.push({
+      pathname: '/AdminDashbord/users',
+      params: { openCreate: '1', createNonce: String(Date.now()) },
+    });
+  }, []);
+
+  const goToProducts = useCallback(() => {
+    router.push('/AdminDashbord/products');
+  }, []);
+
+  const goToSchemeRequests = useCallback(() => {
+    router.push('/AdminDashbord/schemerequests');
+  }, []);
+
   const menuItems = useMemo(
     () => [
-      { title: 'Users', count: usersCount ?? 0, Icon: Users },
-      { title: 'Orders', count: 532, Icon: ShoppingCart },
-      { title: 'Products', count: 89, Icon: Package },
+      { title: 'Users', count: usersCount ?? 0, Icon: Users, onPress: goToUsers },
+      { title: 'Scheme Requests', count: schemeRequestsCount ?? 0, Icon: ClipboardList, onPress: goToSchemeRequests },
+      { title: 'Products', count: productsCount ?? 0, Icon: Package, onPress: goToProducts },
       { title: 'Bills', count: billsCount ?? 0, Icon: FileText },
     ],
-    [billsCount, usersCount]
+    [billsCount, goToProducts, goToSchemeRequests, goToUsers, productsCount, schemeRequestsCount, usersCount]
   );
 
   const quickActions = useMemo(
     () => [
       { label: 'Add User', Icon: UserPlus },
       { label: 'Add Product', Icon: PackagePlus },
-      { label: 'View Reports', Icon: FileSearch },
-      { label: 'Settings', Icon: Settings },
     ],
     []
   );
-
-  const goToUsers = () => {
-    router.push('/AdminDashbord/users');
-  };
-
-  const goToUsersAndOpenCreate = () => {
-    router.push({
-      pathname: '/AdminDashbord/users',
-      params: { openCreate: '1', createNonce: String(Date.now()) },
-    });
-  };
 
   const fetchPosters = useCallback(async () => {
     setPostersLoading(true);
@@ -201,18 +211,18 @@ const AdminHomePage: React.FC = () => {
   );
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.container}>
+    <SafeAreaView edges={[]} style={styles.container}>
       <ScrollView contentInsetAdjustmentBehavior="automatic">
         <Text style={styles.pageTitle}>Overview</Text>
         {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
 
         <View style={styles.statsContainer}>
-          {menuItems.map(({ Icon, count, title }, idx) => (
+          {menuItems.map(({ Icon, count, title, onPress }, idx) => (
             <TouchableOpacity
               key={idx}
               style={styles.statCard}
-              onPress={title === 'Users' ? goToUsers : undefined}
-              disabled={title !== 'Users'}
+              onPress={onPress}
+              disabled={!onPress}
             >
               <View style={styles.statIconWrap}>
                 <Icon color="#dc2626" size={18} />
@@ -229,8 +239,8 @@ const AdminHomePage: React.FC = () => {
             <TouchableOpacity
               key={idx}
               style={styles.actionButton}
-              onPress={label === 'Add User' ? goToUsersAndOpenCreate : undefined}
-              disabled={label !== 'Add User'}
+              onPress={label === 'Add User' ? goToUsersAndOpenCreate : label === 'Add Product' ? goToProducts : undefined}
+              disabled={label !== 'Add User' && label !== 'Add Product'}
             >
               <View style={styles.actionIconWrap}>
                 <Icon color="#dc2626" size={18} />
