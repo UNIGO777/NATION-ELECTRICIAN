@@ -309,7 +309,7 @@ export default function AdminBills() {
   if (!user.isAdmin) return <Redirect href="/(tabs)" />;
 
   return (
-    <SafeAreaView edges={['bottom']} className="flex-1 bg-gray-100">
+    <SafeAreaView  className="flex-1 bg-gray-100">
       <View className="flex-1 px-6 pt-6">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center">

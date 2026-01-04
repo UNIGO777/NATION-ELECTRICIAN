@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Pencil, Plus, Users } from 'lucide-react-native';
+import { Pencil, Plus, Trash2, Users } from 'lucide-react-native';
 import { useLocalSearchParams } from 'expo-router';
 
 import CreateUserModal from '@/AdminComponents/CreateUserModal';
-import { fetchUsersPage, type AdminUserRecord, type UsersPageCursor } from '@/Globalservices/adminUserServices';
+import { deleteUserAsAdmin, fetchUsersPage, type AdminUserRecord, type UsersPageCursor } from '@/Globalservices/adminUserServices';
 import { useUserStore } from '@/Globalservices/userStore';
 
 export default function AdminUsers() {
   const params = useLocalSearchParams<{ openCreate?: string; createNonce?: string }>();
-  const isAdmin = useUserStore((s) => Boolean(s.user?.isAdmin));
+  const currentUser = useUserStore((s) => s.user);
+  const isAdmin = Boolean(currentUser?.isAdmin);
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [cursor, setCursor] = useState<UsersPageCursor>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -20,6 +21,7 @@ export default function AdminUsers() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingUser, setEditingUser] = useState<AdminUserRecord | null>(null);
+  const [deletingUid, setDeletingUid] = useState<string | null>(null);
 
   const pageSize = 10;
 
@@ -66,6 +68,40 @@ export default function AdminUsers() {
     }
   }, [cursor, hasMore, isAdmin, isLoading, isRefreshing]);
 
+  const onDeleteUser = useCallback(
+    (user: AdminUserRecord) => {
+      if (!isAdmin) return;
+      if (!user.uid) return;
+      if (user.uid === currentUser?.uid) {
+        Alert.alert('Not allowed', 'You cannot delete your own account.');
+        return;
+      }
+      if (deletingUid) return;
+
+      Alert.alert('Delete user?', 'This will permanently delete this user and their data.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingUid(user.uid);
+            setErrorText(null);
+            try {
+              await deleteUserAsAdmin(user.uid);
+              await loadFirstPage();
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Failed to delete user';
+              setErrorText(message);
+            } finally {
+              setDeletingUid(null);
+            }
+          },
+        },
+      ]);
+    },
+    [currentUser?.uid, deletingUid, isAdmin, loadFirstPage]
+  );
+
   useEffect(() => {
     loadFirstPage();
   }, [loadFirstPage]);
@@ -76,7 +112,7 @@ export default function AdminUsers() {
       { key: 'password', label: 'Password', flex: 2 },
       { key: 'uid', label: 'UID', flex: 2 },
       { key: 'role', label: 'Role', flex: 1 },
-      { key: 'actions', label: '', flex: 0.6 },
+      { key: 'actions', label: '', flex: 1 },
     ],
     []
   );
@@ -133,14 +169,24 @@ export default function AdminUsers() {
       <Text className="text-xs text-neutral-700" style={{ flex: 1 }} numberOfLines={1}>
         {item.role ?? '-'}
       </Text>
-      <View style={{ flex: 0.6, alignItems: 'flex-end' }}>
-        <Pressable
-          className="h-8 w-8 items-center justify-center rounded-lg bg-neutral-100"
-          onPress={() => openEdit(item)}
-          disabled={!isAdmin}
-        >
-          <Pencil color="#111827" size={16} />
-        </Pressable>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <View className="flex-row items-center" style={{ gap: 8 }}>
+          <Pressable
+            className="h-8 w-8 items-center justify-center rounded-lg bg-neutral-100"
+            onPress={() => openEdit(item)}
+            disabled={!isAdmin || Boolean(deletingUid)}
+          >
+            <Pencil color="#111827" size={16} />
+          </Pressable>
+
+          <Pressable
+            className="h-8 w-8 items-center justify-center rounded-lg bg-red-50"
+            onPress={() => onDeleteUser(item)}
+            disabled={!isAdmin || Boolean(deletingUid) || item.uid === currentUser?.uid}
+          >
+            {deletingUid === item.uid ? <ActivityIndicator size="small" /> : <Trash2 color="#dc2626" size={16} />}
+          </Pressable>
+        </View>
       </View>
     </View>
   );

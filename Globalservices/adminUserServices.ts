@@ -1,4 +1,5 @@
 import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   collection,
   doc,
@@ -12,7 +13,7 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore/lite';
 
-import { db, secondaryAuth } from '@/Globalservices/firebase';
+import { db, firebaseApp, secondaryAuth } from '@/Globalservices/firebase';
 import { useUserStore } from '@/Globalservices/userStore';
 
 export type AdminUserRecord = {
@@ -213,4 +214,21 @@ export const updateUserAsAdmin = async (params: {
     fullName: params.fullName,
     mobileNumber: params.mobileNumber,
   };
+};
+
+export const deleteUserAsAdmin = async (uid: string): Promise<void> => {
+  const currentUser = useUserStore.getState().user;
+  if (!currentUser?.isAdmin) {
+    throw new Error('Only admin can delete users.');
+  }
+  if (!uid) {
+    throw new Error('User uid is required.');
+  }
+  if (uid === currentUser.uid) {
+    throw new Error('You cannot delete your own account.');
+  }
+
+  const functions = getFunctions(firebaseApp);
+  const call = httpsCallable<{ uid: string }, { ok?: boolean }>(functions, 'adminDeleteUser');
+  await call({ uid });
 };

@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Device from 'expo-device';
 import type * as ExpoNotifications from 'expo-notifications';
 import Constants from 'expo-constants';
@@ -15,6 +16,7 @@ export default function TabLayout() {
   const user = useUserStore((s) => s.user);
   const uid = user?.uid ?? null;
   const isAdmin = Boolean(user?.isAdmin);
+  const insets = useSafeAreaInsets();
   const notificationListener = useRef<ExpoNotifications.EventSubscription | null>(null);
   const responseListener = useRef<ExpoNotifications.EventSubscription | null>(null);
   const notificationHandlerConfigured = useRef(false);
@@ -108,8 +110,8 @@ export default function TabLayout() {
           backgroundColor: '#ffffff',
           borderTopColor: '#e5e7eb',
           borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 10,
+          height: 64 + insets.bottom,
+          paddingBottom: 10 + insets.bottom,
           paddingTop: 8,
         },
         tabBarLabelStyle: {

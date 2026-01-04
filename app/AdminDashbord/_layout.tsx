@@ -9,7 +9,7 @@ import AdminNavbar from '@/AdminComponents/AdminNavbar';
 import { HapticTab } from '@/components/haptic-tab';
 import { db } from '@/Globalservices/firebase';
 import { useUserStore } from '@/Globalservices/userStore';
-import { FileText, Gift, Home, Package, Users } from 'lucide-react-native';
+import { ClipboardList, FileText, Gift, Home, Package, Users } from 'lucide-react-native';
 import { doc, setDoc } from 'firebase/firestore/lite';
 
 export default function AdminTabLayout() {
@@ -62,6 +62,8 @@ export default function AdminTabLayout() {
         const data = response.notification.request.content.data as Record<string, unknown> | undefined;
         if (data?.type === 'bill_uploaded') {
           router.push('/AdminDashbord/bills');
+        } else if (data?.type === 'scheme_request') {
+          router.push('/AdminDashbord/schemerequests' as never);
         }
       });
 
@@ -150,6 +152,13 @@ export default function AdminTabLayout() {
         options={{
           title: 'Schemes',
           tabBarIcon: ({ color, size }) => <Gift color={color} size={size ?? 24} />,
+        }}
+      />
+      <Tabs.Screen
+        name="schemerequests"
+        options={{
+          title: 'Requests',
+          tabBarIcon: ({ color, size }) => <ClipboardList color={color} size={size ?? 24} />,
         }}
       />
       <Tabs.Screen name="billprofile" options={{ href: null }} />

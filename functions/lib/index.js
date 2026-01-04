@@ -228,30 +228,10 @@ exports.notifyUserOnSchemeRequestDecision = functions.firestore
     const schemeId = typeof after.schemeId === 'string' ? after.schemeId : '';
     const rawCoins = typeof after.requiredCoins === 'number' ? after.requiredCoins : Number(after.requiredCoins);
     const requiredCoins = Number.isFinite(rawCoins) ? Math.max(0, Math.floor(rawCoins)) : 0;
-    const decidedBy = typeof after.decidedBy === 'string' ? after.decidedBy : '';
-    const createdAt = typeof after.decidedAt === 'number' ? after.decidedAt : Date.now();
     const title = afterStatus === 'approved' ? 'Scheme Request Approved' : 'Scheme Request Rejected';
     const body = afterStatus === 'approved'
-        ? `"${schemeTitle}" has been approved.`
-        : `"${schemeTitle}" has been rejected.`;
-    const notificationId = `${uid}_${requestId}_scheme_${afterStatus}`;
-    const notificationRef = db.collection('Notifications').doc(notificationId);
-    const existing = await notificationRef.get();
-    if (!existing.exists) {
-        await notificationRef.set({
-            uid,
-            schemeRequestId: requestId,
-            schemeId,
-            title,
-            body,
-            type: 'scheme_request_decision',
-            decision: afterStatus,
-            requiredCoins,
-            decidedBy: decidedBy || null,
-            createdAt,
-            read: false,
-        }, { merge: true });
-    }
+        ? `"${schemeTitle}" has been approved. You will get call from our side in next seven days.`
+        : `"${schemeTitle}" has been rejected. You will get call from our side in next seven days.`;
     const tokensSnap = await db.collection('UserFcmTokens').where('uid', '==', uid).where('enabled', '==', true).get();
     const tokens = tokensSnap.docs
         .map((d) => (typeof d.data().token === 'string' ? d.data().token : d.id))

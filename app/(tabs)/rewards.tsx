@@ -15,11 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Bell, Coins, Gift, Search } from 'lucide-react-native';
 
-import { db } from '@/Globalservices/firebase';
+import { db, firebaseApp, firestoreDatabaseId } from '@/Globalservices/firebase';
 import NotificationsPopup from '@/components/user/NotificationsPopup';
 import { useUserStore } from '@/Globalservices/userStore';
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -30,6 +29,7 @@ import {
   where,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore/lite';
+import { collection as collectionFull, doc as docFull, getDoc as getDocFull, getFirestore as getFirestoreFull, runTransaction } from 'firebase/firestore';
 
 type RewardItem = {
   name: string;
@@ -56,6 +56,7 @@ type WalletDoc = {
 };
 
 type SchemeRequestDoc = {
+  id?: string | null;
   uid?: string | null;
   schemeId?: string | null;
   status?: string | null;
@@ -265,22 +266,80 @@ export default function RewardsScreen() {
     setRequesting(true);
     try {
       const now = Date.now();
-      await addDoc(collection(db, 'SchemeRequests'), {
-        uid,
-        schemeId: selectedRow.id,
-        schemeTitle: selectedTitle,
-        requiredCoins,
-        rewardItems: selectedRewardItems,
-        posterUrl: selectedPosterUrl,
-        status: 'pending',
-        createdAt: now,
-        updatedAt: now,
+      const fullDb = getFirestoreFull(firebaseApp, firestoreDatabaseId);
+
+      let targetWalletRef = docFull(fullDb, 'Wallet', uid);
+      const byIdSnap = await getDocFull(targetWalletRef);
+      if (!byIdSnap.exists()) {
+        const walletQuery = query(collection(db, 'Wallet'), where('uid', '==', uid), limit(1));
+        const walletDocs = await getDocs(walletQuery);
+        if (!walletDocs.empty) {
+          targetWalletRef = docFull(fullDb, 'Wallet', walletDocs.docs[0].id);
+        }
+      }
+
+      const requestRef = docFull(collectionFull(fullDb, 'SchemeRequests'));
+      const requestId = requestRef.id;
+      const historyRef = docFull(fullDb, 'History', `${uid}_${requestId}_scheme_request`);
+
+      await runTransaction(fullDb, async (tx) => {
+        const walletSnap = await tx.get(targetWalletRef);
+        if (!walletSnap.exists()) throw new Error('Wallet not found');
+        const walletData = walletSnap.data() as { coins?: unknown; createdAt?: unknown; uid?: unknown };
+        const currentCoins = Number(walletData?.coins ?? 0);
+        if (!Number.isFinite(currentCoins) || currentCoins < requiredCoins) throw new Error('Not enough coins');
+
+        tx.update(targetWalletRef, {
+          uid,
+          coins: currentCoins - requiredCoins,
+          updatedAt: now,
+          createdAt: typeof walletData?.createdAt === 'number' ? (walletData?.createdAt as number) : now,
+        });
+
+        tx.set(requestRef, {
+          id: requestId,
+          uid,
+          schemeId: selectedRow.id,
+          schemeTitle: selectedTitle,
+          requiredCoins,
+          rewardItems: selectedRewardItems,
+          posterUrl: selectedPosterUrl,
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        tx.set(
+          historyRef,
+          {
+            uid,
+            title: 'Scheme Requested',
+            type: 'scheme_request',
+            coinsDelta: -requiredCoins,
+            createdAt: now,
+            schemeRequestId: requestId,
+            schemeId: selectedRow.id,
+            schemeTitle: selectedTitle,
+            requiredCoins,
+            status: 'pending',
+          },
+          { merge: true }
+        );
       });
+
+      await fetchWallet();
       await fetchRequests();
       Alert.alert('Requested', 'Your scheme request has been submitted.');
       closeDetails();
-    } catch {
-      Alert.alert('Failed', 'Unable to request scheme right now.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      if (msg === 'Not enough coins') {
+        Alert.alert('Not enough coins', `You need ${requiredCoins} coins to request this scheme.`);
+      } else if (msg === 'Wallet not found') {
+        Alert.alert('Wallet not found', 'Your wallet could not be found. Please try again later.');
+      } else {
+        Alert.alert('Failed', 'Unable to request scheme right now.');
+      }
     } finally {
       setRequesting(false);
     }
@@ -295,6 +354,7 @@ export default function RewardsScreen() {
     selectedRow,
     selectedTitle,
     uid,
+    fetchWallet,
     walletCoins,
   ]);
 

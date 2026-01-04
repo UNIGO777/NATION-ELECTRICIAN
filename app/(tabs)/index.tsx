@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -27,7 +28,6 @@ import {
   orderBy,
   query,
   setDoc,
-  startAfter,
   where,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore/lite';
@@ -47,6 +47,13 @@ type HistoryItem = {
   pointsColor: string;
 };
 
+type PosterDoc = {
+  id?: string | null;
+  imageUrl?: string | null;
+  enabled?: boolean | null;
+  createdAt?: number | null;
+};
+
 const PAGE_SIZE = 10;
 
 export default function HomeScreen() {
@@ -64,6 +71,10 @@ export default function HomeScreen() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
   const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(null);
+
+  const [posters, setPosters] = useState<PosterDoc[]>([]);
+  const [postersLoading, setPostersLoading] = useState(false);
+  const [postersErrorMessage, setPostersErrorMessage] = useState<string | null>(null);
 
   const historyCursorRef = useRef<QueryDocumentSnapshot | null>(null);
   const historyHasMoreRef = useRef(false);
@@ -162,6 +173,23 @@ export default function HomeScreen() {
     }
   }, [uid]);
 
+  const fetchPosters = useCallback(async () => {
+    setPostersLoading(true);
+    setPostersErrorMessage(null);
+    try {
+      const snap = await getDocs(query(collection(db, 'Posters'), orderBy('createdAt', 'desc'), limit(10)));
+      const next = snap.docs
+        .map((d) => d.data() as PosterDoc)
+        .filter((p) => p && (p.enabled ?? true) && typeof p.imageUrl === 'string' && Boolean(p.imageUrl));
+      setPosters(next);
+    } catch {
+      setPosters([]);
+      setPostersErrorMessage('Unable to load latest updates right now.');
+    } finally {
+      setPostersLoading(false);
+    }
+  }, []);
+
   const mapHistoryDoc = useCallback(
     (docSnap: QueryDocumentSnapshot): HistoryItem => {
       const data = docSnap.data() as Record<string, unknown>;
@@ -221,71 +249,40 @@ export default function HomeScreen() {
       }
 
       try {
-        const base = query(
-          collection(db, 'History'),
-          where('uid', '==', uid),
-          orderBy('createdAt', 'desc'),
-          limit(PAGE_SIZE)
-        );
-
-        const q =
-          mode === 'more' && historyCursorRef.current
-            ? query(
-                collection(db, 'History'),
-                where('uid', '==', uid),
-                orderBy('createdAt', 'desc'),
-                startAfter(historyCursorRef.current),
-                limit(PAGE_SIZE)
-              )
-            : base;
-
-        const snap = await getDocs(q);
-        const items = snap.docs.map(mapHistoryDoc);
-
-        const nextCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
-        const hasMore = snap.docs.length === PAGE_SIZE;
-
-        historyCursorRef.current = nextCursor;
-        historyHasMoreRef.current = hasMore;
-        setHistoryHasMore(hasMore);
-        setHistory((prev) => (mode === 'more' ? [...prev, ...items] : items));
+        const snap = await getDocs(query(collection(db, 'History'), where('uid', '==', uid), limit(PAGE_SIZE * 3)));
+        const sortedDocs = snap.docs.sort((a, b) => {
+          const ad = a.data() as Record<string, unknown>;
+          const bd = b.data() as Record<string, unknown>;
+          const av =
+            (typeof ad.createdAt === 'number'
+              ? ad.createdAt
+              : typeof ad.updatedAt === 'number'
+                ? ad.updatedAt
+                : typeof ad.timestamp === 'number'
+                  ? ad.timestamp
+                  : 0) ?? 0;
+          const bv =
+            (typeof bd.createdAt === 'number'
+              ? bd.createdAt
+              : typeof bd.updatedAt === 'number'
+                ? bd.updatedAt
+                : typeof bd.timestamp === 'number'
+                  ? bd.timestamp
+                  : 0) ?? 0;
+          return bv - av;
+        });
+        const items = sortedDocs.slice(0, PAGE_SIZE).map(mapHistoryDoc);
+        historyCursorRef.current = null;
+        historyHasMoreRef.current = false;
+        setHistoryHasMore(false);
+        setHistory(items);
+        setHistoryErrorMessage(null);
       } catch {
-        try {
-          const snap2 = await getDocs(query(collection(db, 'History'), where('uid', '==', uid), limit(PAGE_SIZE)));
-          const sortedDocs = snap2.docs.sort((a, b) => {
-            const ad = a.data() as Record<string, unknown>;
-            const bd = b.data() as Record<string, unknown>;
-            const av =
-              (typeof ad.createdAt === 'number'
-                ? ad.createdAt
-                : typeof ad.updatedAt === 'number'
-                  ? ad.updatedAt
-                  : typeof ad.timestamp === 'number'
-                    ? ad.timestamp
-                    : 0) ?? 0;
-            const bv =
-              (typeof bd.createdAt === 'number'
-                ? bd.createdAt
-                : typeof bd.updatedAt === 'number'
-                  ? bd.updatedAt
-                  : typeof bd.timestamp === 'number'
-                    ? bd.timestamp
-                    : 0) ?? 0;
-            return bv - av;
-          });
-          const items2 = sortedDocs.slice(0, PAGE_SIZE).map(mapHistoryDoc);
-          historyCursorRef.current = null;
-          historyHasMoreRef.current = false;
-          setHistoryHasMore(false);
-          setHistory(items2);
-          setHistoryErrorMessage(null);
-        } catch {
-          if (mode !== 'more') setHistory([]);
-          historyCursorRef.current = null;
-          historyHasMoreRef.current = false;
-          setHistoryHasMore(false);
-          setHistoryErrorMessage('Unable to load recent activity right now.');
-        }
+        if (mode !== 'more') setHistory([]);
+        historyCursorRef.current = null;
+        historyHasMoreRef.current = false;
+        setHistoryHasMore(false);
+        setHistoryErrorMessage('Unable to load recent activity right now.');
       } finally {
         historyLoadingRef.current = false;
         historyLoadingMoreRef.current = false;
@@ -301,7 +298,8 @@ export default function HomeScreen() {
     void fetchWallet();
     void refreshUnreadNotifications();
     void fetchHistoryPage('reset');
-  }, [fetchHistoryPage, fetchWallet, refreshUnreadNotifications, uid]);
+    void fetchPosters();
+  }, [fetchHistoryPage, fetchPosters, fetchWallet, refreshUnreadNotifications, uid]);
 
   const refreshScreen = useCallback(async () => {
     if (!uid || isRefreshing) return;
@@ -457,12 +455,25 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.bannersRow}
         >
-          <View style={styles.bannerCard}>
-            <Text style={styles.bannerText}>Banner Placeholder 1</Text>
-          </View>
-          <View style={styles.bannerCard}>
-            <Text style={styles.bannerText}>Banner Placeholder 2</Text>
-          </View>
+          {postersLoading ? (
+            <View style={styles.bannerCard}>
+              <ActivityIndicator color="#dc2626" />
+            </View>
+          ) : postersErrorMessage ? (
+            <View style={styles.bannerCard}>
+              <Text style={styles.bannerText}>{postersErrorMessage}</Text>
+            </View>
+          ) : posters.length ? (
+            posters.map((p, idx) => (
+              <View key={(typeof p.id === 'string' && p.id) || String(idx)} style={styles.bannerCard}>
+                <Image source={{ uri: String(p.imageUrl) }} style={styles.bannerImage} />
+              </View>
+            ))
+          ) : (
+            <View style={styles.bannerCard}>
+              <Text style={styles.bannerText}>No updates yet</Text>
+            </View>
+          )}
         </ScrollView>
 
         <View style={styles.activityHeader}>
@@ -718,6 +729,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  bannerImage: {
+    height: '100%',
+    width: '100%',
+    resizeMode: 'cover',
   },
   bannerText: {
     fontSize: 14,
