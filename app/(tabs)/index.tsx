@@ -105,7 +105,7 @@ export default function HomeScreen() {
     resetBillForm();
   }, [resetBillForm]);
 
-  const pickBillImages = useCallback(async () => {
+  const pickBillImagesFromGallery = useCallback(async () => {
     if (billSubmitting) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permission.status !== 'granted') {
@@ -124,6 +124,49 @@ export default function HomeScreen() {
     const uris = result.assets.map((a) => a.uri).filter(Boolean);
     setBillImageUris(uris);
   }, [billSubmitting]);
+
+  const takeBillPhoto = useCallback(async () => {
+    if (billSubmitting) return;
+    if (billImageUris.length >= 10) {
+      Alert.alert('Limit reached', 'You can upload up to 10 bill images.');
+      return;
+    }
+
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('Permission required', 'Allow camera access to take a bill photo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
+
+    if (result.canceled) return;
+    const uri = result.assets[0]?.uri ?? null;
+    if (!uri) return;
+    setBillImageUris((prev) => {
+      const next = [...prev, uri];
+      const seen = new Set<string>();
+      const deduped = next.filter((u) => {
+        if (!u) return false;
+        if (seen.has(u)) return false;
+        seen.add(u);
+        return true;
+      });
+      return deduped.slice(0, 10);
+    });
+  }, [billImageUris.length, billSubmitting]);
+
+  const pickBillImages = useCallback(() => {
+    if (billSubmitting) return;
+    Alert.alert('Add bill images', 'Choose an option', [
+      { text: 'Camera', onPress: () => void takeBillPhoto() },
+      { text: 'Gallery', onPress: () => void pickBillImagesFromGallery() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [billSubmitting, pickBillImagesFromGallery, takeBillPhoto]);
 
   const formatDateLabel = useCallback((value: unknown): string => {
     if (typeof value === 'number') {

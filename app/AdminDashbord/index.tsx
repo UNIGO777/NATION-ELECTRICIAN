@@ -66,6 +66,10 @@ const AdminHomePage: React.FC = () => {
     router.push('/AdminDashbord/products');
   }, []);
 
+  const goToBills = useCallback(() => {
+    router.push('/AdminDashbord/bills');
+  }, []);
+
   const goToSchemeRequests = useCallback(() => {
     router.push('/AdminDashbord/schemerequests');
   }, []);
@@ -75,9 +79,9 @@ const AdminHomePage: React.FC = () => {
       { title: 'Users', count: usersCount ?? 0, Icon: Users, onPress: goToUsers },
       { title: 'Scheme Requests', count: schemeRequestsCount ?? 0, Icon: ClipboardList, onPress: goToSchemeRequests },
       { title: 'Products', count: productsCount ?? 0, Icon: Package, onPress: goToProducts },
-      { title: 'Bills', count: billsCount ?? 0, Icon: FileText },
+      { title: 'Bills', count: billsCount ?? 0, Icon: FileText, onPress: goToBills },
     ],
-    [billsCount, goToProducts, goToSchemeRequests, goToUsers, productsCount, schemeRequestsCount, usersCount]
+    [billsCount, goToBills, goToProducts, goToSchemeRequests, goToUsers, productsCount, schemeRequestsCount, usersCount]
   );
 
   const quickActions = useMemo(
