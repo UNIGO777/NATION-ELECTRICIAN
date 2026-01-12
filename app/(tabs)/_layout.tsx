@@ -8,11 +8,13 @@ import Constants from 'expo-constants';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { db } from '@/Globalservices/firebase';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 import { Gift, Home, Package, User } from 'lucide-react-native';
 import { doc, setDoc } from 'firebase/firestore/lite';
 
 export default function TabLayout() {
+  const t = useT();
   const user = useUserStore((s) => s.user);
   const uid = user?.uid ?? null;
   const isAdmin = Boolean(user?.isAdmin);
@@ -122,28 +124,28 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: t('home'),
           tabBarIcon: ({ color, size }) => <Home color={color} size={size ?? 22} />,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Products',
+          title: t('products'),
           tabBarIcon: ({ color, size }) => <Package color={color} size={size ?? 22} />,
         }}
       />
       <Tabs.Screen
         name="rewards"
         options={{
-          title: 'Rewards',
+          title: t('rewards'),
           tabBarIcon: ({ color, size }) => <Gift color={color} size={size ?? 22} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('profile'),
           tabBarIcon: ({ color, size }) => <User color={color} size={size ?? 22} />,
         }}
       />

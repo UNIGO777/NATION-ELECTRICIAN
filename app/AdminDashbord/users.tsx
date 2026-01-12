@@ -25,11 +25,14 @@ import {
   type AdminUserRecord,
   type UsersPageCursor,
 } from '@/Globalservices/adminUserServices';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 
 export default function AdminUsers() {
+  const t = useT();
   const params = useLocalSearchParams<{ openCreate?: string; createNonce?: string }>();
-  const currentUser = useUserStore((s) => s.user);
+  type UserStoreState = ReturnType<typeof useUserStore.getState>;
+  const currentUser = useUserStore((s: UserStoreState) => s.user);
   const isAdmin = Boolean(currentUser?.isAdmin);
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [cursor, setCursor] = useState<UsersPageCursor>(null);
@@ -61,12 +64,12 @@ export default function AdminUsers() {
       setCursor(page.nextCursor);
       setHasMore(page.hasMore);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load users';
+      const message = err instanceof Error ? err.message : t('failedToLoadUsers');
       setErrorText(message);
     } finally {
       setIsRefreshing(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, t]);
 
   const loadNextPage = useCallback(async () => {
     if (!isAdmin || isLoading || isRefreshing || !hasMore) return;
@@ -87,19 +90,19 @@ export default function AdminUsers() {
       setCursor(page.nextCursor);
       setHasMore(page.hasMore);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load users';
+      const message = err instanceof Error ? err.message : t('failedToLoadUsers');
       setErrorText(message);
     } finally {
       setIsLoading(false);
     }
-  }, [cursor, hasMore, isAdmin, isLoading, isRefreshing]);
+  }, [cursor, hasMore, isAdmin, isLoading, isRefreshing, t]);
 
   const onToggleBlocked = useCallback(
     (user: AdminUserRecord) => {
       if (!isAdmin) return;
       if (!user.uid) return;
       if (user.uid === currentUser?.uid) {
-        Alert.alert('Not allowed', 'You cannot block your own account.');
+        Alert.alert(t('notAllowedTitle'), t('cannotBlockOwnAccount'));
         return;
       }
       if (blockingUid) return;
@@ -107,10 +110,10 @@ export default function AdminUsers() {
       const currentStatus = user.status ?? 'active';
       const nextStatus: 'active' | 'blocked' = currentStatus === 'blocked' ? 'active' : 'blocked';
 
-      Alert.alert(nextStatus === 'blocked' ? 'Block user?' : 'Unblock user?', nextStatus === 'blocked' ? 'This user will not be able to sign in.' : 'This user will be able to sign in again.', [
-        { text: 'Cancel', style: 'cancel' },
+      Alert.alert(nextStatus === 'blocked' ? t('blockUserTitle') : t('unblockUserTitle'), nextStatus === 'blocked' ? t('blockUserBody') : t('unblockUserBody'), [
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: nextStatus === 'blocked' ? 'Block' : 'Unblock',
+          text: nextStatus === 'blocked' ? t('block') : t('unblock'),
           style: nextStatus === 'blocked' ? 'destructive' : 'default',
           onPress: async () => {
             setBlockingUid(user.uid);
@@ -120,7 +123,7 @@ export default function AdminUsers() {
               setUsers((prev) => prev.map((u) => (u.uid === user.uid ? { ...u, status: nextStatus } : u)));
               await loadFirstPage();
             } catch (err) {
-              const message = err instanceof Error ? err.message : 'Failed to update user';
+              const message = err instanceof Error ? err.message : t('failedToUpdateUser');
               setErrorText(message);
             } finally {
               setBlockingUid(null);
@@ -129,7 +132,7 @@ export default function AdminUsers() {
         },
       ]);
     },
-    [blockingUid, currentUser?.uid, isAdmin, loadFirstPage]
+    [blockingUid, currentUser?.uid, isAdmin, loadFirstPage, t]
   );
 
   useEffect(() => {
@@ -138,11 +141,11 @@ export default function AdminUsers() {
 
   const columns = useMemo(
     () => [
-      { key: 'email', label: 'Email', flex: 1 },
-      { key: 'role', label: 'Role', flex: 1 },
-      { key: 'actions', label: 'Actions', flex: 1 },
+      { key: 'email', label: t('email'), flex: 1 },
+      { key: 'role', label: t('role'), flex: 1 },
+      { key: 'actions', label: t('actions'), flex: 1 },
     ],
-    []
+    [t]
   );
 
   const renderHeader = () => (
@@ -198,7 +201,7 @@ export default function AdminUsers() {
       const coins = await fetchWalletCoinsAsAdmin(user.uid);
       setWalletCoins(coins);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load wallet';
+      const message = err instanceof Error ? err.message : t('failedToLoadWallet');
       setWalletErrorText(message);
     } finally {
       setWalletCoinsLoading(false);
@@ -216,7 +219,7 @@ export default function AdminUsers() {
       const raw = walletAmountText.trim();
       const amount = Math.floor(Number(raw));
       if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error('Enter a valid coins amount.');
+        throw new Error(t('enterValidCoinsAmount'));
       }
 
       const result = await adjustUserWalletCoinsAsAdmin({
@@ -226,12 +229,12 @@ export default function AdminUsers() {
       });
 
       Alert.alert(
-        'Wallet updated',
-        `Deducted ${Math.abs(result.appliedDelta)} coins.\nNew balance: ${result.afterCoins} coins.`
+        t('walletUpdatedTitle'),
+        t('walletUpdatedBody', { deducted: Math.abs(result.appliedDelta), balance: result.afterCoins })
       );
       closeWalletModal();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update wallet';
+      const message = err instanceof Error ? err.message : t('failedToUpdateWallet');
       setWalletErrorText(message);
     } finally {
       setWalletSubmitting(false);
@@ -281,7 +284,7 @@ export default function AdminUsers() {
             {blockingUid === item.uid ? (
               <ActivityIndicator size="small" color="#ffffff" />
             ) : (
-              <Text className="text-xs font-semibold text-white">{item.status === 'blocked' ? 'Unblock' : 'Block'}</Text>
+              <Text className="text-xs font-semibold text-white">{item.status === 'blocked' ? t('unblock') : t('block')}</Text>
             )}
           </Pressable>
         </View>
@@ -313,9 +316,9 @@ export default function AdminUsers() {
                     <Coins color="#dc2626" size={20} />
                   </View>
                   <View style={styles.headerTextWrap}>
-                    <Text style={styles.headerTitle}>Deduct Coins</Text>
+                    <Text style={styles.headerTitle}>{t('deductCoins')}</Text>
                     <Text style={styles.headerSubtitle}>
-                      {walletUser?.email ? walletUser.email : walletUser?.uid ? walletUser.uid : 'User'}
+                      {walletUser?.email ? walletUser.email : walletUser?.uid ? walletUser.uid : t('user')}
                     </Text>
                   </View>
                   <Pressable onPress={closeWalletModal} style={styles.closeButton}>
@@ -325,7 +328,7 @@ export default function AdminUsers() {
               </View>
 
               <View style={styles.content}>
-                <Text style={styles.label}>Current Coins</Text>
+                <Text style={styles.label}>{t('currentCoins')}</Text>
                 <View style={styles.readonlyRow}>
                   {walletCoinsLoading ? (
                     <ActivityIndicator color="#dc2626" />
@@ -335,10 +338,10 @@ export default function AdminUsers() {
                 </View>
 
                 <View style={styles.field}>
-                  <Text style={styles.label}>Coins to deduct</Text>
+                  <Text style={styles.label}>{t('coinsToDeduct')}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. 50"
+                    placeholder={t('exampleCoinsAmount')}
                     placeholderTextColor="#9ca3af"
                     keyboardType="number-pad"
                     value={walletAmountText}
@@ -347,10 +350,10 @@ export default function AdminUsers() {
                 </View>
 
                 <View style={styles.field}>
-                  <Text style={styles.label}>Reason (optional)</Text>
+                  <Text style={styles.label}>{t('reasonOptional')}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Reason"
+                    placeholder={t('reason')}
                     placeholderTextColor="#9ca3af"
                     value={walletReason}
                     onChangeText={setWalletReason}
@@ -364,7 +367,7 @@ export default function AdminUsers() {
                   disabled={walletSubmitting || walletCoinsLoading}
                   onPress={submitWalletDeduction}
                 >
-                  <Text style={styles.submitText}>{walletSubmitting ? 'Updating...' : 'Deduct Coins'}</Text>
+                  <Text style={styles.submitText}>{walletSubmitting ? t('updating') : t('deductCoins')}</Text>
                 </Pressable>
               </View>
             </KeyboardAvoidingView>
@@ -379,8 +382,8 @@ export default function AdminUsers() {
               <Users color="#dc2626" size={18} />
             </View>
             <View>
-              <Text className="text-xl font-semibold text-neutral-900">Users</Text>
-              <Text className="text-xs text-neutral-500">Manage users (10 per page)</Text>
+              <Text className="text-xl font-semibold text-neutral-900">{t('users')}</Text>
+              <Text className="text-xs text-neutral-500">{t('usersManageSubtitle')}</Text>
             </View>
           </View>
 
@@ -391,14 +394,14 @@ export default function AdminUsers() {
               onPress={openCreate}
             >
               <Plus color="#ffffff" size={18} />
-              <Text className="ml-2 text-white font-semibold">New</Text>
+              <Text className="ml-2 text-white font-semibold">{t('new')}</Text>
             </Pressable>
           ) : null}
         </View>
 
         {errorText ? <Text className="text-red-600 text-sm mt-3">{errorText}</Text> : null}
         {!isAdmin ? (
-          <Text className="text-red-600 text-sm mt-3">Only admin can view and create users.</Text>
+          <Text className="text-red-600 text-sm mt-3">{t('onlyAdminCanViewUsers')}</Text>
         ) : null}
       </View>
 
@@ -422,7 +425,7 @@ export default function AdminUsers() {
                 <View className="py-4" />
               ) : (
                 <View className="py-4">
-                  <Text className="text-center text-xs text-neutral-400">No more users</Text>
+                  <Text className="text-center text-xs text-neutral-400">{t('noMoreUsers')}</Text>
                 </View>
               )
             }

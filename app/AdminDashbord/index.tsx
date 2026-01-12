@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { fetchBillsCount, fetchProductsCount, fetchSchemeRequestsCount, fetchUsersCount } from '@/Globalservices/adminUserServices';
 import { db, storage } from '@/Globalservices/firebase';
+import { useT } from '@/Globalservices/i18n';
 import { collection, deleteDoc, doc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore/lite';
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 
@@ -19,6 +20,7 @@ type PosterDoc = {
 };
 
 const AdminHomePage: React.FC = () => {
+  const t = useT();
   const [usersCount, setUsersCount] = useState<number | null>(null);
   const [billsCount, setBillsCount] = useState<number | null>(null);
   const [productsCount, setProductsCount] = useState<number | null>(null);
@@ -43,13 +45,13 @@ const AdminHomePage: React.FC = () => {
       })
       .catch((err) => {
         if (!isMounted) return;
-        const message = err instanceof Error ? err.message : 'Failed to load counts';
+        const message = err instanceof Error ? err.message : t('failedToLoadCounts');
         setErrorText(message);
       });
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [t]);
 
   const goToUsers = useCallback(() => {
     router.push('/AdminDashbord/users');
@@ -76,20 +78,20 @@ const AdminHomePage: React.FC = () => {
 
   const menuItems = useMemo(
     () => [
-      { title: 'Users', count: usersCount ?? 0, Icon: Users, onPress: goToUsers },
-      { title: 'Scheme Requests', count: schemeRequestsCount ?? 0, Icon: ClipboardList, onPress: goToSchemeRequests },
-      { title: 'Products', count: productsCount ?? 0, Icon: Package, onPress: goToProducts },
-      { title: 'Bills', count: billsCount ?? 0, Icon: FileText, onPress: goToBills },
+      { title: t('users'), count: usersCount ?? 0, Icon: Users, onPress: goToUsers },
+      { title: t('schemeRequests'), count: schemeRequestsCount ?? 0, Icon: ClipboardList, onPress: goToSchemeRequests },
+      { title: t('products'), count: productsCount ?? 0, Icon: Package, onPress: goToProducts },
+      { title: t('bills'), count: billsCount ?? 0, Icon: FileText, onPress: goToBills },
     ],
-    [billsCount, goToBills, goToProducts, goToSchemeRequests, goToUsers, productsCount, schemeRequestsCount, usersCount]
+    [billsCount, goToBills, goToProducts, goToSchemeRequests, goToUsers, productsCount, schemeRequestsCount, t, usersCount]
   );
 
   const quickActions = useMemo(
     () => [
-      { label: 'Add User', Icon: UserPlus },
-      { label: 'Add Product', Icon: PackagePlus },
+      { key: 'addUser', label: t('addUser'), Icon: UserPlus, onPress: goToUsersAndOpenCreate },
+      { key: 'addProduct', label: t('addProduct'), Icon: PackagePlus, onPress: goToProducts },
     ],
-    []
+    [goToProducts, goToUsersAndOpenCreate, t]
   );
 
   const fetchPosters = useCallback(async () => {
@@ -113,7 +115,7 @@ const AdminHomePage: React.FC = () => {
     if (posterUploading) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permission.status !== 'granted') {
-      Alert.alert('Permission required', 'Allow photo access to select poster image.');
+      Alert.alert(t('permissionRequired'), t('allowPhotoAccessPoster'));
       return;
     }
 
@@ -126,7 +128,7 @@ const AdminHomePage: React.FC = () => {
     const uri = result.assets[0]?.uri ?? null;
     if (!uri) return;
     setPosterImageUri(uri);
-  }, [posterUploading]);
+  }, [posterUploading, t]);
 
   const resetPosterForm = useCallback(() => {
     setPosterImageUri(null);
@@ -141,7 +143,7 @@ const AdminHomePage: React.FC = () => {
   const uploadPoster = useCallback(async () => {
     if (posterUploading) return;
     if (!posterImageUri) {
-      Alert.alert('Poster required', 'Please select a poster image.');
+      Alert.alert(t('posterRequired'), t('selectPosterImage'));
       return;
     }
 
@@ -172,14 +174,14 @@ const AdminHomePage: React.FC = () => {
         { merge: true }
       );
 
-      Alert.alert('Uploaded', 'Poster uploaded successfully.');
+      Alert.alert(t('uploaded'), t('uploadedPosterSuccess'));
       await fetchPosters();
       closePosterModal();
     } catch {
-      Alert.alert('Upload failed', 'Unable to upload poster right now. Please try again.');
+      Alert.alert(t('uploadFailed'), t('uploadFailedTryAgain'));
       setPosterUploading(false);
     }
-  }, [closePosterModal, fetchPosters, posterImageUri, posterUploading]);
+  }, [closePosterModal, fetchPosters, posterImageUri, posterUploading, t]);
 
   const deletePoster = useCallback(
     (poster: PosterDoc) => {
@@ -187,10 +189,10 @@ const AdminHomePage: React.FC = () => {
       if (!id) return;
       if (postersBusyId) return;
 
-      Alert.alert('Delete poster', 'Are you sure you want to delete this poster?', [
-        { text: 'Cancel', style: 'cancel' },
+      Alert.alert(t('deletePosterTitle'), t('deletePosterBody'), [
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             setPostersBusyId(id);
@@ -211,13 +213,13 @@ const AdminHomePage: React.FC = () => {
         },
       ]);
     },
-    [fetchPosters, postersBusyId]
+    [fetchPosters, postersBusyId, t]
   );
 
   return (
     <SafeAreaView edges={[]} style={styles.container}>
       <ScrollView contentInsetAdjustmentBehavior="automatic">
-        <Text style={styles.pageTitle}>Overview</Text>
+        <Text style={styles.pageTitle}>{t('overview')}</Text>
         {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
 
         <View style={styles.statsContainer}>
@@ -237,14 +239,14 @@ const AdminHomePage: React.FC = () => {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
         <View style={styles.actionsContainer}>
-          {quickActions.map(({ Icon, label }, idx) => (
+          {quickActions.map(({ Icon, label, onPress, key }, idx) => (
             <TouchableOpacity
-              key={idx}
+              key={key ?? idx}
               style={styles.actionButton}
-              onPress={label === 'Add User' ? goToUsersAndOpenCreate : label === 'Add Product' ? goToProducts : undefined}
-              disabled={label !== 'Add User' && label !== 'Add Product'}
+              onPress={onPress}
+              disabled={!onPress}
             >
               <View style={styles.actionIconWrap}>
                 <Icon color="#dc2626" size={18} />
@@ -254,20 +256,20 @@ const AdminHomePage: React.FC = () => {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Posters</Text>
+        <Text style={styles.sectionTitle}>{t('posters')}</Text>
         <View style={styles.actionsContainer}>
           <TouchableOpacity style={styles.actionButton} onPress={() => setPosterModalOpen(true)} disabled={posterUploading}>
             <View style={styles.actionIconWrap}>
               <PackagePlus color="#dc2626" size={18} />
             </View>
-            <Text style={styles.actionLabel}>Upload Poster</Text>
+            <Text style={styles.actionLabel}>{t('uploadPoster')}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.postersHeaderRow}>
-          <Text style={styles.postersSubtitle}>Existing Posters</Text>
+          <Text style={styles.postersSubtitle}>{t('existingPosters')}</Text>
           <Pressable onPress={fetchPosters} disabled={postersLoading} style={styles.postersRefreshButton}>
-            <Text style={styles.postersRefreshText}>{postersLoading ? 'Loading...' : 'Refresh'}</Text>
+            <Text style={styles.postersRefreshText}>{postersLoading ? t('loading') : t('refresh')}</Text>
           </Pressable>
         </View>
 
@@ -291,14 +293,14 @@ const AdminHomePage: React.FC = () => {
                     disabled={disabled}
                     style={[styles.posterDeleteButton, disabled ? styles.posterDeleteButtonDisabled : null]}
                   >
-                    <Text style={styles.posterDeleteText}>{disabled ? '...' : 'Delete'}</Text>
+                    <Text style={styles.posterDeleteText}>{disabled ? '...' : t('delete')}</Text>
                   </Pressable>
                 </View>
               );
             })
           ) : (
             <View style={styles.posterThumb}>
-              <Text style={styles.postersEmptyText}>No posters yet</Text>
+              <Text style={styles.postersEmptyText}>{t('noPostersYet')}</Text>
             </View>
           )}
         </ScrollView>
@@ -308,9 +310,9 @@ const AdminHomePage: React.FC = () => {
         <View style={styles.posterOverlay}>
           <View style={styles.posterCard}>
             <View style={styles.posterHeader}>
-              <Text style={styles.posterTitle}>Upload Poster</Text>
+              <Text style={styles.posterTitle}>{t('uploadPoster')}</Text>
               <Pressable onPress={closePosterModal} disabled={posterUploading} style={styles.posterClose}>
-                <Text style={styles.posterCloseText}>Close</Text>
+                <Text style={styles.posterCloseText}>{t('close')}</Text>
               </Pressable>
             </View>
 
@@ -321,14 +323,14 @@ const AdminHomePage: React.FC = () => {
 
               <View style={styles.posterButtonsRow}>
                 <Pressable onPress={pickPosterImage} disabled={posterUploading} style={styles.posterPickButton}>
-                  <Text style={styles.posterPickButtonText}>Select Image</Text>
+                  <Text style={styles.posterPickButtonText}>{t('selectImage')}</Text>
                 </Pressable>
                 <Pressable
                   onPress={uploadPoster}
                   disabled={posterUploading}
                   style={[styles.posterUploadButton, posterUploading ? styles.posterUploadButtonDisabled : null]}
                 >
-                  {posterUploading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.posterUploadButtonText}>Upload</Text>}
+                  {posterUploading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.posterUploadButtonText}>{t('upload')}</Text>}
                 </Pressable>
               </View>
             </View>

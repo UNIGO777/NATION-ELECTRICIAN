@@ -16,6 +16,7 @@ import { Bell, Search } from 'lucide-react-native';
 
 import { db } from '@/Globalservices/firebase';
 import NotificationsPopup from '@/components/user/NotificationsPopup';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 import { collection, getDocs, limit, orderBy, query, where, type QueryDocumentSnapshot } from 'firebase/firestore/lite';
 
@@ -33,6 +34,7 @@ type ProductRow = {
 };
 
 export default function ProductsScreen() {
+  const t = useT();
   const user = useUserStore((s) => s.user);
   const uid = typeof user?.uid === 'string' ? user.uid : null;
 
@@ -66,11 +68,11 @@ export default function ProductsScreen() {
       const nextRows = snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, data: d.data() as ProductRecord }));
       setRows(nextRows);
     } catch {
-      setErrorText('Unable to load products right now.');
+      setErrorText(t('unableLoadProducts'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void fetchProducts();
@@ -133,8 +135,8 @@ export default function ProductsScreen() {
       >
         <View style={styles.header}>
           <View style={styles.headerTextWrap}>
-            <Text style={styles.title}>Products</Text>
-            <Text style={styles.subtitle}>Tap any product for details</Text>
+            <Text style={styles.title}>{t('products')}</Text>
+            <Text style={styles.subtitle}>{t('productsSubtitle')}</Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable
@@ -187,8 +189,8 @@ export default function ProductsScreen() {
           </View>
         ) : (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>No products yet</Text>
-            <Text style={styles.emptySubtitle}>Please check again later.</Text>
+            <Text style={styles.emptyTitle}>{t('noProductsYet')}</Text>
+            <Text style={styles.emptySubtitle}>{t('checkAgainLater')}</Text>
           </View>
         )}
       </ScrollView>

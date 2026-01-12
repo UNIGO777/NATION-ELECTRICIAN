@@ -8,11 +8,13 @@ import Constants from 'expo-constants';
 import AdminNavbar from '@/AdminComponents/AdminNavbar';
 import { HapticTab } from '@/components/haptic-tab';
 import { db } from '@/Globalservices/firebase';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 import { ClipboardList, FileText, Gift, Home, Package, Users } from 'lucide-react-native';
 import { doc, setDoc } from 'firebase/firestore/lite';
 
 export default function AdminTabLayout() {
+  const t = useT();
   const user = useUserStore((s) => s.user);
   const router = useRouter();
   const notificationListener = useRef<ExpoNotifications.EventSubscription | null>(null);
@@ -122,42 +124,42 @@ export default function AdminTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: t('home'),
           tabBarIcon: ({ color, size }) => <Home color={color} size={size ?? 24} />,
         }}
       />
       <Tabs.Screen
         name="bills"
         options={{
-          title: 'Bills',
+          title: t('bills'),
           tabBarIcon: ({ color, size }) => <FileText color={color} size={size ?? 24} />,
         }}
       />
       <Tabs.Screen
         name="users"
         options={{
-          title: 'Users',
+          title: t('users'),
           tabBarIcon: ({ color, size }) => <Users color={color} size={size ?? 24} />,
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
-          title: 'Products',
+          title: t('products'),
           tabBarIcon: ({ color, size }) => <Package color={color} size={size ?? 24} />,
         }}
       />
       <Tabs.Screen
         name="schemes"
         options={{
-          title: 'Schemes',
+          title: t('schemes'),
           tabBarIcon: ({ color, size }) => <Gift color={color} size={size ?? 24} />,
         }}
       />
       <Tabs.Screen
         name="schemerequests"
         options={{
-          title: 'Requests',
+          title: t('requests'),
           tabBarIcon: ({ color, size }) => <ClipboardList color={color} size={size ?? 24} />,
         }}
       />

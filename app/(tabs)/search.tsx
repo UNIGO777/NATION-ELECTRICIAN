@@ -16,6 +16,7 @@ import { Bell, Search as SearchIcon } from 'lucide-react-native';
 
 import NotificationsPopup from '@/components/user/NotificationsPopup';
 import { db } from '@/Globalservices/firebase';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 import { collection, getDocs, limit, orderBy, query, where, type QueryDocumentSnapshot } from 'firebase/firestore/lite';
 
@@ -77,6 +78,7 @@ const formatRewardPreview = (raw: unknown): string => {
 };
 
 export default function SearchScreen() {
+  const t = useT();
   const user = useUserStore((s) => s.user);
   const uid = typeof user?.uid === 'string' ? user.uid : null;
   const params = useLocalSearchParams();
@@ -129,13 +131,13 @@ export default function SearchScreen() {
         schemesSnap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, data: d.data() as SchemeRecord }))
       );
     } catch {
-      setErrorText('Unable to load search data right now.');
+      setErrorText(t('unableLoadSearchData'));
       setProducts([]);
       setSchemes([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     setActiveType(initialType);
@@ -231,8 +233,8 @@ export default function SearchScreen() {
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.title}>Search</Text>
-          <Text style={styles.subtitle}>Products and Schemes</Text>
+          <Text style={styles.title}>{t('search')}</Text>
+          <Text style={styles.subtitle}>{t('productsAndSchemes')}</Text>
         </View>
         <Pressable style={styles.iconButton} onPress={() => setNotificationsOpen(true)}>
           <Bell color="#111827" size={18} />
@@ -247,7 +249,7 @@ export default function SearchScreen() {
         <TextInput
           value={queryText}
           onChangeText={setQueryText}
-          placeholder={activeType === 'products' ? 'Search products...' : 'Search schemes...'}
+          placeholder={activeType === 'products' ? t('searchProducts') : t('searchSchemes')}
           placeholderTextColor="#9ca3af"
           style={styles.searchInput}
         />
@@ -258,13 +260,13 @@ export default function SearchScreen() {
           style={[styles.toggleButton, activeType === 'products' ? styles.toggleActive : null]}
           onPress={() => setActiveType('products')}
         >
-          <Text style={[styles.toggleText, activeType === 'products' ? styles.toggleTextActive : null]}>Products</Text>
+          <Text style={[styles.toggleText, activeType === 'products' ? styles.toggleTextActive : null]}>{t('products')}</Text>
         </Pressable>
         <Pressable
           style={[styles.toggleButton, activeType === 'schemes' ? styles.toggleActive : null]}
           onPress={() => setActiveType('schemes')}
         >
-          <Text style={[styles.toggleText, activeType === 'schemes' ? styles.toggleTextActive : null]}>Schemes</Text>
+          <Text style={[styles.toggleText, activeType === 'schemes' ? styles.toggleTextActive : null]}>{t('schemes')}</Text>
         </Pressable>
       </View>
 
@@ -319,7 +321,7 @@ export default function SearchScreen() {
                           {title}
                         </Text>
                         <Text style={styles.cardMeta} numberOfLines={1}>
-                          Required Coins: {requiredCoins !== null ? requiredCoins : '—'}
+                          {t('requiredCoins')}: {requiredCoins !== null ? requiredCoins : '—'}
                         </Text>
                         <Text style={styles.cardHint} numberOfLines={2}>
                           {rewardLabel}
@@ -332,8 +334,8 @@ export default function SearchScreen() {
             )
           ) : (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyTitle}>No results</Text>
-              <Text style={styles.emptySubtitle}>Try a different keyword.</Text>
+              <Text style={styles.emptyTitle}>{t('noResults')}</Text>
+              <Text style={styles.emptySubtitle}>{t('tryDifferentKeyword')}</Text>
             </View>
           )}
         </ScrollView>
@@ -388,12 +390,12 @@ export default function SearchScreen() {
                       )}
                     </View>
                     <View style={styles.detailCard}>
-                      <Text style={styles.detailLabel}>Required Coins</Text>
+                      <Text style={styles.detailLabel}>{t('requiredCoins')}</Text>
                       <Text style={styles.detailPrimary}>
                         {selectedSchemeRequiredCoins !== null ? String(selectedSchemeRequiredCoins) : '—'}
                       </Text>
                       <View style={styles.detailDivider} />
-                      <Text style={styles.detailLabel}>Reward Items</Text>
+                      <Text style={styles.detailLabel}>{t('rewardItems')}</Text>
                       {selectedSchemeRewards.length ? (
                         <View style={styles.rewardList}>
                           {selectedSchemeRewards.map((item, idx) => (
@@ -406,7 +408,7 @@ export default function SearchScreen() {
                           ))}
                         </View>
                       ) : (
-                        <Text style={styles.detailMuted}>No reward items.</Text>
+                        <Text style={styles.detailMuted}>{t('noRewardItems')}</Text>
                       )}
                     </View>
                   </>

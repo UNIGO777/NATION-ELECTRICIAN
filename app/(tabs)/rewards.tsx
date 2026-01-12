@@ -17,6 +17,7 @@ import { Bell, Coins, Gift, Search } from 'lucide-react-native';
 
 import { db, firebaseApp, firestoreDatabaseId } from '@/Globalservices/firebase';
 import NotificationsPopup from '@/components/user/NotificationsPopup';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 import {
   collection,
@@ -90,6 +91,7 @@ const formatRewardPreview = (raw: unknown): string => {
 };
 
 export default function RewardsScreen() {
+  const t = useT();
   const user = useUserStore((s) => s.user);
   const uid = typeof user?.uid === 'string' ? user.uid : null;
 
@@ -156,11 +158,11 @@ export default function RewardsScreen() {
       const nextRows = snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, data: d.data() as SchemeRecord }));
       setRows(nextRows);
     } catch {
-      setErrorText('Unable to load schemes right now.');
+      setErrorText(t('unableLoadSchemes'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchRequests = useCallback(async () => {
     if (!uid) return;
@@ -244,22 +246,22 @@ export default function RewardsScreen() {
 
   const requestScheme = useCallback(async () => {
     if (!uid || !selectedRow) {
-      Alert.alert('Login required', 'Please login to request a scheme.');
+      Alert.alert(t('loginRequiredTitle'), t('loginRequiredBody'));
       return;
     }
     if (requesting) return;
 
     const requiredCoins = selectedRequiredCoins;
     if (requiredCoins === null || requiredCoins <= 0) {
-      Alert.alert('Invalid scheme', 'This scheme is missing required coins.');
+      Alert.alert(t('invalidSchemeTitle'), t('invalidSchemeBody'));
       return;
     }
     if (walletCoins < requiredCoins) {
-      Alert.alert('Not enough coins', `You need ${requiredCoins} coins to request this scheme.`);
+      Alert.alert(t('notEnoughCoinsTitle'), t('needCoinsToRequest', { count: requiredCoins }));
       return;
     }
     if (requestStatus && requestStatus !== 'rejected') {
-      Alert.alert('Already requested', 'Your request is already submitted.');
+      Alert.alert(t('alreadyRequestedTitle'), t('alreadyRequestedBody'));
       return;
     }
 
@@ -329,16 +331,16 @@ export default function RewardsScreen() {
 
       await fetchWallet();
       await fetchRequests();
-      Alert.alert('Requested', 'Your scheme request has been submitted.');
+      Alert.alert(t('requestedTitle'), t('requestedBody'));
       closeDetails();
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
       if (msg === 'Not enough coins') {
-        Alert.alert('Not enough coins', `You need ${requiredCoins} coins to request this scheme.`);
+        Alert.alert(t('notEnoughCoinsTitle'), t('needCoinsToRequest', { count: requiredCoins }));
       } else if (msg === 'Wallet not found') {
-        Alert.alert('Wallet not found', 'Your wallet could not be found. Please try again later.');
+        Alert.alert(t('walletNotFoundTitle'), t('walletNotFoundBody'));
       } else {
-        Alert.alert('Failed', 'Unable to request scheme right now.');
+        Alert.alert(t('failedTitle'), t('requestSchemeFailed'));
       }
     } finally {
       setRequesting(false);
@@ -346,6 +348,7 @@ export default function RewardsScreen() {
   }, [
     closeDetails,
     fetchRequests,
+    t,
     requestStatus,
     requesting,
     selectedPosterUrl,
@@ -378,8 +381,8 @@ export default function RewardsScreen() {
               <Gift color="#dc2626" size={20} />
             </View>
             <View style={styles.headerTextWrap}>
-              <Text style={styles.title}>Rewards</Text>
-              <Text style={styles.subtitle}>Request a scheme using your coins</Text>
+              <Text style={styles.title}>{t('rewards')}</Text>
+              <Text style={styles.subtitle}>{t('rewardsSubtitle')}</Text>
             </View>
           </View>
           <View style={styles.headerActions}>
@@ -402,8 +405,8 @@ export default function RewardsScreen() {
               <Coins color="#dc2626" size={18} />
             </View>
             <View style={styles.walletTextWrap}>
-              <Text style={styles.walletLabel}>Your Coins</Text>
-              <Text style={styles.walletValue}>{walletLoading ? 'Loading...' : String(walletCoins)}</Text>
+              <Text style={styles.walletLabel}>{t('yourCoins')}</Text>
+              <Text style={styles.walletValue}>{walletLoading ? t('loading') : String(walletCoins)}</Text>
             </View>
           </View>
         </View>
@@ -441,7 +444,7 @@ export default function RewardsScreen() {
                         {title}
                       </Text>
                       <Text style={styles.schemeMeta} numberOfLines={1}>
-                        Required Coins: {requiredCoins !== null ? requiredCoins : '—'}
+                        {t('requiredCoins')}: {requiredCoins !== null ? requiredCoins : '—'}
                       </Text>
                       <Text style={styles.schemeRewards} numberOfLines={2}>
                         {rewardLabel}
@@ -455,7 +458,7 @@ export default function RewardsScreen() {
                         {requiredCoins !== null ? (
                           <View style={[styles.badge, isEligible ? styles.badgeOk : styles.badgeNo]}>
                             <Text style={[styles.badgeText, isEligible ? styles.badgeTextOk : styles.badgeTextNo]}>
-                              {isEligible ? 'ELIGIBLE' : 'NOT ENOUGH COINS'}
+                              {isEligible ? t('eligible') : t('notEnoughCoinsBadge')}
                             </Text>
                           </View>
                         ) : null}
@@ -468,8 +471,8 @@ export default function RewardsScreen() {
           </View>
         ) : (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>No schemes yet</Text>
-            <Text style={styles.emptySubtitle}>Please check again later.</Text>
+            <Text style={styles.emptyTitle}>{t('noSchemesYet')}</Text>
+            <Text style={styles.emptySubtitle}>{t('checkAgainLater')}</Text>
           </View>
         )}
       </ScrollView>
@@ -507,12 +510,12 @@ export default function RewardsScreen() {
                 </View>
 
                 <View style={styles.detailCard}>
-                  <Text style={styles.detailLabel}>Required Coins</Text>
+                  <Text style={styles.detailLabel}>{t('requiredCoins')}</Text>
                   <Text style={styles.detailValue}>{selectedRequiredCoins !== null ? String(selectedRequiredCoins) : '—'}</Text>
 
                   <View style={styles.detailDivider} />
 
-                  <Text style={styles.detailLabel}>Reward Items</Text>
+                  <Text style={styles.detailLabel}>{t('rewardItems')}</Text>
                   {selectedRewardItems.length ? (
                     <View style={styles.rewardList}>
                       {selectedRewardItems.map((item, idx) => (
@@ -525,7 +528,7 @@ export default function RewardsScreen() {
                       ))}
                     </View>
                   ) : (
-                    <Text style={styles.detailMuted}>No reward items.</Text>
+                    <Text style={styles.detailMuted}>{t('noRewardItems')}</Text>
                   )}
                 </View>
               </ScrollView>
@@ -538,12 +541,12 @@ export default function RewardsScreen() {
                 >
                   <Text style={styles.requestButtonText}>
                     {requesting
-                      ? 'Requesting...'
+                      ? t('requesting')
                       : requestStatus && requestStatus !== 'rejected'
-                        ? 'Already Requested'
+                        ? t('alreadyRequestedButton')
                         : canRequest
-                          ? 'Request Scheme'
-                          : 'Not Enough Coins'}
+                          ? t('requestScheme')
+                          : t('notEnoughCoinsButton')}
                   </Text>
                 </Pressable>
               </View>

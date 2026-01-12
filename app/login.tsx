@@ -5,9 +5,11 @@ import { useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUserStore } from '@/Globalservices/userStore';
 import { auth } from '@/Globalservices/firebase';
+import { useT } from '@/Globalservices/i18n';
 import { getLoginErrorMessage, loginWithEmailPassword } from '@/Globalservices/loginServices';
 
 export default function Login() {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,13 +57,13 @@ export default function Login() {
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: insets.bottom + 24 }}
           keyboardShouldPersistTaps="handled"
         >
-          <Text className="text-3xl font-bold text-neutral-900 text-center mb-6">Login</Text>
+          <Text className="text-3xl font-bold text-neutral-900 text-center mb-6">{t('login')}</Text>
 
           <View className="mb-5">
-            <Text className="text-xs text-neutral-500 mb-2">Email</Text>
+            <Text className="text-xs text-neutral-500 mb-2">{t('email')}</Text>
             <TextInput
               className="border-b border-neutral-200 py-3 text-neutral-900"
-              placeholder="example@gmail.com"
+              placeholder={t('email')}
               placeholderTextColor="#9ca3af"
               autoCapitalize="none"
               keyboardType="email-address"
@@ -72,7 +74,7 @@ export default function Login() {
           </View>
 
           <View className="mb-5">
-            <Text className="text-xs text-neutral-500 mb-2">Password</Text>
+            <Text className="text-xs text-neutral-500 mb-2">{t('password')}</Text>
             <TextInput
               className="border-b border-neutral-200 py-3 text-neutral-900"
               placeholder="••••••••"
@@ -97,11 +99,11 @@ export default function Login() {
           >
 
             <Text className="text-white text-base font-semibold">
-              {isSubmitting ? 'Logging in...' : 'Login'}
+              {isSubmitting ? t('loggingIn') : t('login')}
             </Text>
           </Pressable>
 
-          <Text className="mt-6 text-center text-neutral-500">Contact admin for access</Text>
+          <Text className="mt-6 text-center text-neutral-500">{t('contactAdminAccess')}</Text>
         </ScrollView>
       </View>
     </SafeAreaView>

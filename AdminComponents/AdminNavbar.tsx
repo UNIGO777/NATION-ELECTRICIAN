@@ -7,24 +7,27 @@ import { signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { auth, isFirebaseConfigured } from '@/Globalservices/firebase';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 
-const getHeaderConfigFromPath = (pathname: string) => {
-  if (pathname.includes('/AdminDashbord/bills')) 
-    return { title: 'Bills', Icon: FileText, subtitle: 'Manage all invoices' };
-  if (pathname.includes('/AdminDashbord/users')) 
-    return { title: 'Users', Icon: Users, subtitle: 'User management' };
-  if (pathname.includes('/AdminDashbord/products')) 
-    return { title: 'Products', Icon: Package, subtitle: 'Manage products' };
-  if (pathname.includes('/AdminDashbord/schemes')) 
-    return { title: 'Schemes', Icon: Gift, subtitle: 'Manage schemes' };
-  return { title: 'Dashboard', Icon: Home, subtitle: 'Overview & statistics' };
+const getHeaderConfigFromPath = (pathname: string, t: ReturnType<typeof useT>) => {
+  if (pathname.includes('/AdminDashbord/bills'))
+    return { title: t('bills'), Icon: FileText, subtitle: t('adminNavbarBillsSubtitle') };
+  if (pathname.includes('/AdminDashbord/users'))
+    return { title: t('users'), Icon: Users, subtitle: t('adminNavbarUsersSubtitle') };
+  if (pathname.includes('/AdminDashbord/products'))
+    return { title: t('products'), Icon: Package, subtitle: t('adminNavbarProductsSubtitle') };
+  if (pathname.includes('/AdminDashbord/schemes'))
+    return { title: t('schemes'), Icon: Gift, subtitle: t('adminNavbarSchemesSubtitle') };
+  return { title: t('dashboard'), Icon: Home, subtitle: t('adminNavbarDashboardSubtitle') };
 };
 
 export default function AdminNavbar() {
+  const t = useT();
   const pathname = usePathname();
-  const { title, Icon, subtitle } = getHeaderConfigFromPath(pathname);
-  const clearUser = useUserStore((s) => s.clearUser);
+  const { title, Icon, subtitle } = getHeaderConfigFromPath(pathname, t);
+  type UserStoreState = ReturnType<typeof useUserStore.getState>;
+  const clearUser = useUserStore((s: UserStoreState) => s.clearUser);
 
   const handleLogout = async () => {
     try {
@@ -73,7 +76,7 @@ export default function AdminNavbar() {
 
             <View style={styles.adminBadge}>
               <View style={styles.adminDot} />
-              <Text style={styles.adminText}>Admin</Text>
+              <Text style={styles.adminText}>{t('admin')}</Text>
             </View>
           </View>
         </View>

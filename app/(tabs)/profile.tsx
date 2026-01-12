@@ -7,10 +7,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { auth, db, isFirebaseConfigured } from '@/Globalservices/firebase';
 import NotificationsPopup from '@/components/user/NotificationsPopup';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore/lite';
 
 export default function ProfileScreen() {
+  const t = useT();
   const user = useUserStore((s) => s.user);
   const clearUser = useUserStore((s) => s.clearUser);
   const setUser = useUserStore((s) => s.setUser);
@@ -138,7 +140,7 @@ export default function ProfileScreen() {
               <UserIcon color="#dc2626" size={20} />
             </View>
             <View style={styles.headerTextWrap}>
-              <Text style={styles.title}>Profile</Text>
+              <Text style={styles.title}>{t('profile')}</Text>
               <Text style={styles.subtitle}>{fullName}</Text>
             </View>
           </View>
@@ -156,14 +158,14 @@ export default function ProfileScreen() {
 
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>{t('email')}</Text>
             <Text style={styles.value} numberOfLines={1}>
               {email}
             </Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.row}>
-            <Text style={styles.label}>Mobile</Text>
+            <Text style={styles.label}>{t('mobile')}</Text>
             <Text style={styles.value} numberOfLines={1}>
               {mobileNumber}
             </Text>
@@ -177,7 +179,7 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.divider} />
           <View style={styles.row}>
-            <Text style={styles.label}>Role</Text>
+            <Text style={styles.label}>{t('role')}</Text>
             <Text style={styles.value} numberOfLines={1}>
               {role}
             </Text>
@@ -194,7 +196,7 @@ export default function ProfileScreen() {
           ) : (
             <>
               <LogOut color="#ffffff" size={18} />
-              <Text style={styles.logoutText}>Logout</Text>
+              <Text style={styles.logoutText}>{t('logout')}</Text>
             </>
           )}
         </Pressable>

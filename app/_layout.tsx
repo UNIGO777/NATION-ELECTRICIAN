@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { auth, db, isFirebaseConfigured } from '@/Globalservices/firebase';
+import { tFor, useI18nStore } from '@/Globalservices/i18n';
 import { useUserStore, type UserData } from '@/Globalservices/userStore';
 
 export const unstable_settings = {
@@ -42,8 +43,14 @@ export default function RootLayout() {
   const user = useUserStore((s) => s.user);
   const setUser = useUserStore((s) => s.setUser);
   const clearUser = useUserStore((s) => s.clearUser);
+  const hydrateI18n = useI18nStore((s) => s.hydrate);
+  const isI18nHydrated = useI18nStore((s) => s.isHydrated);
   const [isSessionReady, setIsSessionReady] = useState(false);
   const blockedAlertUidRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    void hydrateI18n();
+  }, [hydrateI18n]);
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -90,7 +97,8 @@ export default function RootLayout() {
         if (isBlocked) {
           if (blockedAlertUidRef.current !== firebaseUser.uid) {
             blockedAlertUidRef.current = firebaseUser.uid;
-            Alert.alert('Account Blocked', 'Your account has been blocked. Contact admin for assistance.');
+            const lang = useI18nStore.getState().language;
+            Alert.alert(tFor(lang, 'accountBlockedTitle'), tFor(lang, 'accountBlockedBody'));
           }
           await Promise.all([
             AsyncStorage.removeItem(SESSION_USER_KEY).catch(() => null),
@@ -151,7 +159,7 @@ export default function RootLayout() {
     if (!isInTabs) router.replace('/(tabs)');
   }, [isSessionReady, router, segments, user]);
 
-  if (!isSessionReady) return null;
+  if (!isSessionReady || !isI18nHydrated) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -162,7 +170,13 @@ export default function RootLayout() {
             <Stack.Screen name="welcome" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="AdminDashbord" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen
+              name="modal"
+              options={{
+                presentation: 'modal',
+                title: tFor(useI18nStore.getState().language, 'modalTitle'),
+              }}
+            />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

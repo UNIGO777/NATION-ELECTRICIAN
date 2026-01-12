@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ImagePlus, PackagePlus, Pencil, RefreshCcw, Search, Trash2, X } from 'lucide-react-native';
 
 import { db, storage } from '@/Globalservices/firebase';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 import {
   collection,
@@ -50,6 +51,7 @@ type ProductRow = {
 type ModalMode = 'create' | 'edit';
 
 export default function AdminProducts() {
+  const t = useT();
   const user = useUserStore((s) => s.user);
   const adminUid = user?.uid ?? null;
 
@@ -113,11 +115,11 @@ export default function AdminProducts() {
       const nextRows = snap.docs.map((d: QueryDocumentSnapshot) => ({ id: d.id, data: d.data() as ProductRecord }));
       setRows(nextRows);
     } catch {
-      setErrorText('Unable to load products right now.');
+      setErrorText(t('unableLoadProducts'));
     } finally {
       setLoading(false);
     }
-  }, [user?.isAdmin]);
+  }, [t, user?.isAdmin]);
 
   useEffect(() => {
     void fetchProducts();
@@ -127,7 +129,7 @@ export default function AdminProducts() {
     if (submitting) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permission.status !== 'granted') {
-      Alert.alert('Permission required', 'Allow photo access to select product image.');
+      Alert.alert(t('permissionRequired'), t('allowPhotoAccessProductImage'));
       return;
     }
 
@@ -140,7 +142,7 @@ export default function AdminProducts() {
     const uri = result.assets[0]?.uri;
     if (!uri) return;
     setPickedImageUri(uri);
-  }, [submitting]);
+  }, [submitting, t]);
 
   const uploadProductImage = useCallback(async (params: { productId: string; uri: string }) => {
     const normalized = params.uri.split('?')[0] ?? params.uri;
@@ -160,18 +162,18 @@ export default function AdminProducts() {
 
     const trimmedName = name.trim();
     if (!trimmedName) {
-      Alert.alert('Name required', 'Please enter product name.');
+      Alert.alert(t('nameRequiredTitle'), t('nameRequiredBody'));
       return;
     }
 
     const price = Number(priceInput);
     if (!Number.isFinite(price) || price <= 0) {
-      Alert.alert('Price required', 'Please enter valid product price.');
+      Alert.alert(t('priceRequiredTitle'), t('priceRequiredBody'));
       return;
     }
 
     if (modalMode === 'create' && !pickedImageUri) {
-      Alert.alert('Image required', 'Please select product image.');
+      Alert.alert(t('imageRequiredTitle'), t('imageRequiredBody'));
       return;
     }
 
@@ -193,7 +195,7 @@ export default function AdminProducts() {
         });
       } else {
         if (!editingId) {
-          setErrorText('Product id missing.');
+          setErrorText(t('productIdMissing'));
           return;
         }
         const productRef = doc(db, 'Products', editingId);
@@ -213,7 +215,7 @@ export default function AdminProducts() {
       await fetchProducts();
       closeModal();
     } catch {
-      setErrorText('Unable to save product right now.');
+      setErrorText(t('unableSaveProduct'));
     } finally {
       setSubmitting(false);
     }
@@ -229,28 +231,29 @@ export default function AdminProducts() {
     pickedImageUri,
     priceInput,
     submitting,
+    t,
     uploadProductImage,
   ]);
 
-  const modalTitle = useMemo(() => (modalMode === 'create' ? 'Add Product' : 'Edit Product'), [modalMode]);
+  const modalTitle = useMemo(() => (modalMode === 'create' ? t('addProduct') : t('editProduct')), [modalMode, t]);
   const submitLabel = useMemo(() => {
-    if (submitting) return modalMode === 'create' ? 'Creating...' : 'Updating...';
-    return modalMode === 'create' ? 'Create Product' : 'Update Product';
-  }, [modalMode, submitting]);
+    if (submitting) return modalMode === 'create' ? t('creating') : t('updating');
+    return modalMode === 'create' ? t('createProduct') : t('updateProduct');
+  }, [modalMode, submitting, t]);
 
   const deleteProduct = useCallback(() => {
     if (!adminUid) return;
     if (submitting) return;
     if (modalMode !== 'edit') return;
     if (!editingId) {
-      setErrorText('Product id missing.');
+      setErrorText(t('productIdMissing'));
       return;
     }
 
-    Alert.alert('Delete product?', 'This action cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('deleteProductTitle'), t('cannotUndo'), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('delete'),
         style: 'destructive',
         onPress: async () => {
           setSubmitting(true);
@@ -260,14 +263,14 @@ export default function AdminProducts() {
             await fetchProducts();
             closeModal();
           } catch {
-            setErrorText('Unable to delete product right now.');
+            setErrorText(t('unableDeleteProduct'));
           } finally {
             setSubmitting(false);
           }
         },
       },
     ]);
-  }, [adminUid, closeModal, editingId, fetchProducts, modalMode, submitting]);
+  }, [adminUid, closeModal, editingId, fetchProducts, modalMode, submitting, t]);
 
   const previewUri = pickedImageUri ?? existingImageUrl ?? null;
 
@@ -289,14 +292,14 @@ export default function AdminProducts() {
   return (
     <SafeAreaView edges={['bottom']} style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.pageTitle}>Products</Text>
+        <Text style={styles.pageTitle}>{t('products')}</Text>
         <View style={styles.headerActions}>
           <Pressable style={styles.iconButton} onPress={fetchProducts} disabled={loading}>
             <RefreshCcw color="#dc2626" size={18} />
           </Pressable>
           <Pressable style={styles.addButton} onPress={openCreate}>
             <PackagePlus size={18} color="#ffffff" />
-            <Text style={styles.addButtonText}>Add</Text>
+            <Text style={styles.addButtonText}>{t('add')}</Text>
           </Pressable>
         </View>
       </View>
@@ -306,7 +309,7 @@ export default function AdminProducts() {
           <Search size={16} color="#9ca3af" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search products"
+            placeholder={t('adminSearchProducts')}
             placeholderTextColor="#9ca3af"
             value={searchText}
             onChangeText={setSearchText}
@@ -369,7 +372,7 @@ export default function AdminProducts() {
                   <View style={styles.productRight}>
                     <View style={styles.editPill}>
                       <Pencil size={14} color="#dc2626" />
-                      <Text style={styles.editPillText}>Edit</Text>
+                      <Text style={styles.editPillText}>{t('edit')}</Text>
                     </View>
                   </View>
                 </Pressable>
@@ -377,9 +380,9 @@ export default function AdminProducts() {
             })
           ) : (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyTitle}>{searchText.trim() ? 'No matching products' : 'No products yet'}</Text>
+              <Text style={styles.emptyTitle}>{searchText.trim() ? t('noMatchingProducts') : t('noProductsYet')}</Text>
               <Text style={styles.emptySubtitle}>
-                {searchText.trim() ? 'Try a different search.' : 'Tap Add to upload your first product.'}
+                {searchText.trim() ? t('tryDifferentSearch') : t('tapAddFirstProduct')}
               </Text>
             </View>
           )}
@@ -401,7 +404,7 @@ export default function AdminProducts() {
                     </View>
                     <View style={styles.modalHeaderText}>
                       <Text style={styles.modalTitle}>{modalTitle}</Text>
-                      <Text style={styles.modalSubtitle}>Upload, edit and manage products</Text>
+                      <Text style={styles.modalSubtitle}>{t('manageProductsSubtitle')}</Text>
                     </View>
                     <Pressable onPress={closeModal} style={styles.closeButton}>
                       <X size={18} color="#6b7280" />
@@ -410,23 +413,23 @@ export default function AdminProducts() {
                 </View>
 
                 <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-                  <Text style={styles.label}>Product Image</Text>
+                  <Text style={styles.label}>{t('productImage')}</Text>
                   <Pressable style={styles.imagePicker} onPress={pickImage} disabled={submitting}>
                     {previewUri ? (
                       <Image source={{ uri: previewUri }} style={styles.imagePreview} />
                     ) : (
                       <View style={styles.imageEmpty}>
                         <ImagePlus size={22} color="#dc2626" />
-                        <Text style={styles.imageEmptyText}>Select image</Text>
+                        <Text style={styles.imageEmptyText}>{t('selectImageLower')}</Text>
                       </View>
                     )}
                   </Pressable>
 
                   <View style={styles.field}>
-                    <Text style={styles.label}>Name</Text>
+                    <Text style={styles.label}>{t('productNameLabel')}</Text>
                     <TextInput
                       style={styles.input}
-                      placeholder="Product name"
+                      placeholder={t('productNamePlaceholder')}
                       placeholderTextColor="#9ca3af"
                       value={name}
                       onChangeText={setName}
@@ -435,7 +438,7 @@ export default function AdminProducts() {
                   </View>
 
                   <View style={styles.field}>
-                    <Text style={styles.label}>Price</Text>
+                    <Text style={styles.label}>{t('priceLabel')}</Text>
                     <TextInput
                       style={styles.input}
                       placeholder="0"
@@ -448,10 +451,10 @@ export default function AdminProducts() {
                   </View>
 
                   <View style={styles.field}>
-                    <Text style={styles.label}>Description</Text>
+                    <Text style={styles.label}>{t('descriptionLabel')}</Text>
                     <TextInput
                       style={[styles.input, styles.textArea]}
-                      placeholder="Optional"
+                      placeholder={t('optional')}
                       placeholderTextColor="#9ca3af"
                       value={description}
                       onChangeText={setDescription}
@@ -470,7 +473,7 @@ export default function AdminProducts() {
                         disabled={submitting}
                       >
                         <Trash2 size={16} color="#ffffff" />
-                        <Text style={styles.footerButtonText}>Delete</Text>
+                        <Text style={styles.footerButtonText}>{t('delete')}</Text>
                       </Pressable>
                     ) : null}
                     <Pressable

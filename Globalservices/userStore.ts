@@ -13,8 +13,8 @@ type UserStoreState = {
   clearUser: () => void;
 };
 
-export const useUserStore = create<UserStoreState>((set) => ({
+export const useUserStore = create<UserStoreState>((set: (partial: Partial<UserStoreState>) => void) => ({
   user: null,
-  setUser: (user) => set({ user }),
+  setUser: (user: UserData | null) => set({ user }),
   clearUser: () => set({ user: null }),
 }));

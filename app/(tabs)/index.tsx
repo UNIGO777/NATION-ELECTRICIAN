@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 
 import NotificationsPopup from '@/components/user/NotificationsPopup';
 import { db, storage } from '@/Globalservices/firebase';
+import { useT } from '@/Globalservices/i18n';
 import { useUserStore } from '@/Globalservices/userStore';
 import {
   addDoc,
@@ -58,6 +59,7 @@ type PosterDoc = {
 const PAGE_SIZE = 10;
 
 export default function HomeScreen() {
+  const t = useT();
   const router = useRouter();
   const user = useUserStore((s) => s.user);
   const uid = user?.uid ?? null;
@@ -109,7 +111,7 @@ export default function HomeScreen() {
     if (billSubmitting) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permission.status !== 'granted') {
-      Alert.alert('Permission required', 'Allow photo access to select bill images.');
+      Alert.alert(t('permissionRequired'), t('allowPhotoAccessBills'));
       return;
     }
 
@@ -123,18 +125,18 @@ export default function HomeScreen() {
     if (result.canceled) return;
     const uris = result.assets.map((a) => a.uri).filter(Boolean);
     setBillImageUris(uris);
-  }, [billSubmitting]);
+  }, [billSubmitting, t]);
 
   const takeBillPhoto = useCallback(async () => {
     if (billSubmitting) return;
     if (billImageUris.length >= 10) {
-      Alert.alert('Limit reached', 'You can upload up to 10 bill images.');
+      Alert.alert(t('limitReached'), t('billImagesLimit'));
       return;
     }
 
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (permission.status !== 'granted') {
-      Alert.alert('Permission required', 'Allow camera access to take a bill photo.');
+      Alert.alert(t('permissionRequired'), t('allowCameraAccessBill'));
       return;
     }
 
@@ -157,16 +159,16 @@ export default function HomeScreen() {
       });
       return deduped.slice(0, 10);
     });
-  }, [billImageUris.length, billSubmitting]);
+  }, [billImageUris.length, billSubmitting, t]);
 
   const pickBillImages = useCallback(() => {
     if (billSubmitting) return;
-    Alert.alert('Add bill images', 'Choose an option', [
-      { text: 'Camera', onPress: () => void takeBillPhoto() },
-      { text: 'Gallery', onPress: () => void pickBillImagesFromGallery() },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('addBillImagesTitle'), t('addBillImagesBody'), [
+      { text: t('camera'), onPress: () => void takeBillPhoto() },
+      { text: t('gallery'), onPress: () => void pickBillImagesFromGallery() },
+      { text: t('cancel'), style: 'cancel' },
     ]);
-  }, [billSubmitting, pickBillImagesFromGallery, takeBillPhoto]);
+  }, [billSubmitting, pickBillImagesFromGallery, t, takeBillPhoto]);
 
   const formatDateLabel = useCallback((value: unknown): string => {
     if (typeof value === 'number') {
@@ -265,7 +267,7 @@ export default function HomeScreen() {
       const isPositive = rawDelta >= 0;
       const coinsLabel =
         Number.isFinite(rawDelta) && rawDelta !== 0
-          ? `${isPositive ? '+' : ''}${rawDelta} coins`
+          ? `${isPositive ? '+' : ''}${rawDelta} ${t('coinsWord')}`
           : undefined;
       const subtitle = [createdAtLabel, coinsLabel].filter(Boolean).join(' • ');
 
@@ -277,7 +279,7 @@ export default function HomeScreen() {
         pointsColor: isPositive ? '#dc2626' : '#6b7280',
       };
     },
-    [formatDateLabel]
+    [formatDateLabel, t]
   );
 
   const fetchHistoryPage = useCallback(
@@ -358,24 +360,24 @@ export default function HomeScreen() {
 
   const submitBillUpload = useCallback(async () => {
     if (!uid) {
-      Alert.alert('Not logged in', 'Please login first.');
+      Alert.alert(t('notLoggedInTitle'), t('pleaseLoginFirst'));
       return;
     }
     const billNo = billNumber.trim();
     if (!billNo) {
-      Alert.alert('Bill number required', 'Please enter bill number.');
+      Alert.alert(t('billNumberRequiredTitle'), t('billNumberRequiredBody'));
       return;
     }
 
     const name = customerName.trim();
     if (!name) {
-      Alert.alert('Customer name required', 'Please enter customer name.');
+      Alert.alert(t('customerNameRequiredTitle'), t('customerNameRequiredBody'));
       return;
     }
 
     const amount = Number(billTotalAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
-      Alert.alert('Total amount required', 'Please enter valid total amount.');
+      Alert.alert(t('totalAmountRequiredTitle'), t('totalAmountRequiredBody'));
       return;
     }
 
@@ -383,7 +385,7 @@ export default function HomeScreen() {
     try {
       const now = Date.now();
       if (!billImageUris.length) {
-        Alert.alert('Bill images required', 'Please select at least 1 bill image.');
+        Alert.alert(t('billImagesRequiredTitle'), t('billImagesRequiredBody'));
         return;
       }
 
@@ -415,7 +417,7 @@ export default function HomeScreen() {
 
       await addDoc(collection(db, 'History'), {
         uid,
-        title: 'Bill Uploaded',
+        title: t('billUploadedTitle'),
         type: 'bill_upload',
         coinsDelta: 0,
         createdAt: now,
@@ -424,15 +426,15 @@ export default function HomeScreen() {
         totalAmount: amount,
       });
 
-      Alert.alert('Uploaded', 'Your bill was uploaded successfully.');
+      Alert.alert(t('uploaded'), t('billUploadedSuccess'));
       closeUpload();
       await fetchHistoryPage('reset');
     } catch {
-      Alert.alert('Upload failed', 'Unable to upload bill right now. Please try again later.');
+      Alert.alert(t('uploadFailed'), t('billUploadFailed'));
     } finally {
       setBillSubmitting(false);
     }
-  }, [billImageUris, billNumber, billTotalAmount, closeUpload, customerName, fetchHistoryPage, uid]);
+  }, [billImageUris, billNumber, billTotalAmount, closeUpload, customerName, fetchHistoryPage, t, uid]);
 
   const coinsText = useMemo(() => {
     return walletCoins.toLocaleString();
@@ -461,7 +463,7 @@ export default function HomeScreen() {
         }
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Dashboard</Text>
+          <Text style={styles.headerTitle}>{t('dashboard')}</Text>
           <Pressable style={styles.bellButton} onPress={() => setNotificationsOpen(true)}>
             <Bell color="#111827" size={20} />
             {notificationsHasUnread ? <View style={styles.bellDot} /> : null}
@@ -471,7 +473,7 @@ export default function HomeScreen() {
         <View style={styles.coinsCard}>
           <View style={styles.coinsTopRow}>
             <View>
-              <Text style={styles.coinsLabel}>Total Coins</Text>
+              <Text style={styles.coinsLabel}>{t('totalCoins')}</Text>
               {walletLoading ? (
                 <View style={styles.walletLoadingRow}>
                   <ActivityIndicator color="#ffffff" />
@@ -479,7 +481,7 @@ export default function HomeScreen() {
               ) : (
                 <Text style={styles.coinsValue}>{coinsText}</Text>
               )}
-              {!!uid && <Text style={styles.walletUid}>UID: {uid}</Text>}
+              {!!uid && <Text style={styles.walletUid}>{t('uidLabel', { uid })}</Text>}
             </View>
             <View style={styles.moneyCircle}>
               <Coins color="#ffffff" size={18} />
@@ -489,20 +491,20 @@ export default function HomeScreen() {
           <View style={styles.quickRow}>
             <Pressable style={styles.quickButton} onPress={() => setIsUploadOpen(true)}>
               <Upload color="#dc2626" size={18} />
-              <Text style={styles.quickLabel}>Upload</Text>
+              <Text style={styles.quickLabel}>{t('upload')}</Text>
             </Pressable>
             <Pressable style={styles.quickButton} onPress={goToProducts}>
               <Package color="#dc2626" size={18} />
-              <Text style={styles.quickLabel}>Products</Text>
+              <Text style={styles.quickLabel}>{t('products')}</Text>
             </Pressable>
             <Pressable style={styles.quickButton} onPress={goToRewards}>
               <Gift color="#dc2626" size={18} />
-              <Text style={styles.quickLabel}>Gifts</Text>
+              <Text style={styles.quickLabel}>{t('gifts')}</Text>
             </Pressable>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Latest Updates</Text>
+        <Text style={styles.sectionTitle}>{t('latestUpdates')}</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -524,15 +526,15 @@ export default function HomeScreen() {
             ))
           ) : (
             <View style={styles.bannerCard}>
-              <Text style={styles.bannerText}>No updates yet</Text>
+              <Text style={styles.bannerText}>{t('noUpdatesYet')}</Text>
             </View>
           )}
         </ScrollView>
 
         <View style={styles.activityHeader}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
           <Pressable onPress={() => fetchHistoryPage('reset')}>
-            <Text style={styles.viewAll}>Refresh</Text>
+            <Text style={styles.viewAll}>{t('refresh')}</Text>
           </Pressable>
         </View>
 
@@ -545,21 +547,21 @@ export default function HomeScreen() {
             <View style={styles.emptyActivityCard}>
               <Text style={styles.emptyActivityTitle}>{historyErrorMessage}</Text>
               <Text style={styles.emptyActivitySubtitle}>
-                Welcome! To earn coins upload bills and wait for admin response.
+                {t('welcomeEarnCoins')}
               </Text>
             </View>
           ) : history.length === 0 ? (
             <View style={styles.emptyActivityCard}>
-              <Text style={styles.emptyActivityTitle}>No activity yet</Text>
+              <Text style={styles.emptyActivityTitle}>{t('noActivityYet')}</Text>
               <Text style={styles.emptyActivitySubtitle}>
-                Welcome! To earn coins upload bills and wait for admin response.
+                {t('welcomeEarnCoins')}
               </Text>
             </View>
           ) : (
             history.map((item) => (
               <View key={item.id} style={styles.activityItem}>
                 <View style={styles.txCircle}>
-                  <Text style={styles.txText}>Tx</Text>
+                  <Text style={styles.txText}>{t('tx')}</Text>
                 </View>
                 <View style={styles.activityTextWrap}>
                   <Text style={styles.activityTitle}>{item.title}</Text>
@@ -579,7 +581,7 @@ export default function HomeScreen() {
             {historyLoadingMore ? (
               <ActivityIndicator color="#dc2626" />
             ) : (
-              <Text style={styles.loadMoreText}>Load more</Text>
+              <Text style={styles.loadMoreText}>{t('loadMore')}</Text>
             )}
           </Pressable>
         )}
@@ -598,9 +600,9 @@ export default function HomeScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Upload Bill</Text>
+              <Text style={styles.modalTitle}>{t('uploadBill')}</Text>
               <Pressable onPress={closeUpload} style={styles.modalCloseButton}>
-                <Text style={styles.modalCloseText}>Close</Text>
+                <Text style={styles.modalCloseText}>{t('close')}</Text>
               </Pressable>
             </View>
 
@@ -609,39 +611,39 @@ export default function HomeScreen() {
               contentContainerStyle={styles.modalContent}
               keyboardShouldPersistTaps="handled"
             >
-              <Text style={styles.modalSectionTitle}>Bill Images</Text>
+              <Text style={styles.modalSectionTitle}>{t('billImages')}</Text>
               <View style={styles.rowBetween}>
-                <Text style={styles.modalHint}>{billImageUris.length} selected</Text>
+                <Text style={styles.modalHint}>{t('selectedCount', { count: billImageUris.length })}</Text>
                 <Pressable onPress={pickBillImages} style={styles.primaryButtonSmall} disabled={billSubmitting}>
-                  <Text style={styles.primaryButtonSmallText}>Select Images</Text>
+                  <Text style={styles.primaryButtonSmallText}>{t('selectImages')}</Text>
                 </Pressable>
               </View>
 
-              <Text style={styles.modalSectionTitle}>Customer Name</Text>
+              <Text style={styles.modalSectionTitle}>{t('customerName')}</Text>
               <TextInput
                 value={customerName}
                 onChangeText={setCustomerName}
-                placeholder="Customer name"
+                placeholder={t('customerName')}
                 placeholderTextColor="#9ca3af"
                 style={styles.input}
                 editable={!billSubmitting}
               />
 
-              <Text style={styles.modalSectionTitle}>Bill Number</Text>
+              <Text style={styles.modalSectionTitle}>{t('billNumber')}</Text>
               <TextInput
                 value={billNumber}
                 onChangeText={setBillNumber}
-                placeholder="Bill number"
+                placeholder={t('billNumber')}
                 placeholderTextColor="#9ca3af"
                 style={styles.input}
                 editable={!billSubmitting}
               />
 
-              <Text style={styles.modalSectionTitle}>Total Amount</Text>
+              <Text style={styles.modalSectionTitle}>{t('totalAmount')}</Text>
               <TextInput
                 value={billTotalAmount}
                 onChangeText={setBillTotalAmount}
-                placeholder="Total amount"
+                placeholder={t('totalAmount')}
                 placeholderTextColor="#9ca3af"
                 keyboardType="numeric"
                 style={styles.input}
@@ -656,7 +658,7 @@ export default function HomeScreen() {
                 {billSubmitting ? (
                   <ActivityIndicator color="#ffffff" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Upload Bill</Text>
+                  <Text style={styles.submitButtonText}>{t('uploadBill')}</Text>
                 )}
               </Pressable>
             </ScrollView>

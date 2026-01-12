@@ -13,7 +13,7 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? '',
 };
 
-export const firestoreDatabaseId = process.env.EXPO_PUBLIC_FIRESTORE_DATABASE_ID ?? '(default)';
+export const firestoreDatabaseId = 'electrician';
 
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId
