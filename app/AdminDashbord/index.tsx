@@ -113,7 +113,9 @@ const AdminHomePage: React.FC = () => {
 
   const pickPosterImage = useCallback(async () => {
     if (posterUploading) return;
+    console.log('[AdminDashbord] pickPosterImage:start');
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    console.log('[AdminDashbord] pickPosterImage:permission', permission);
     if (permission.status !== 'granted') {
       Alert.alert(t('permissionRequired'), t('allowPhotoAccessPoster'));
       return;
@@ -123,6 +125,10 @@ const AdminHomePage: React.FC = () => {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: false,
       quality: 0.85,
+    });
+    console.log('[AdminDashbord] pickPosterImage:result', {
+      canceled: result.canceled,
+      asset0: result.assets?.[0]?.uri ?? null,
     });
     if (result.canceled) return;
     const uri = result.assets[0]?.uri ?? null;
@@ -149,18 +155,25 @@ const AdminHomePage: React.FC = () => {
 
     setPosterUploading(true);
     try {
+      console.log('[AdminDashbord] uploadPoster:start', { posterImageUri });
       const now = Date.now();
       const posterRef = doc(collection(db, 'Posters'));
 
       const normalized = posterImageUri.split('?')[0] ?? posterImageUri;
       const rawExt = normalized.split('.').pop()?.toLowerCase();
       const ext = rawExt && rawExt.length <= 5 ? rawExt : 'jpg';
+      console.log('[AdminDashbord] uploadPoster:doc', { posterId: posterRef.id, ext, normalized });
 
       const res = await fetch(posterImageUri);
+      console.log('[AdminDashbord] uploadPoster:fetch', { ok: res.ok, status: res.status, url: res.url });
       const blob = await res.blob();
+      console.log('[AdminDashbord] uploadPoster:blob', { type: blob.type, size: (blob as unknown as { size?: unknown }).size ?? null });
       const objectRef = storageRef(storage, `Posters/${posterRef.id}.${ext}`);
+      console.log('[AdminDashbord] uploadPoster:uploadBytes:start', { path: objectRef.fullPath });
       await uploadBytes(objectRef, blob, { contentType: blob.type || 'image/jpeg' });
+      console.log('[AdminDashbord] uploadPoster:uploadBytes:done', { path: objectRef.fullPath });
       const imageUrl = await getDownloadURL(objectRef);
+      console.log('[AdminDashbord] uploadPoster:getDownloadURL:done', { imageUrl });
 
       await setDoc(
         posterRef,
@@ -173,12 +186,16 @@ const AdminHomePage: React.FC = () => {
         },
         { merge: true }
       );
+      console.log('[AdminDashbord] uploadPoster:setDoc:done', { posterId: posterRef.id });
 
       Alert.alert(t('uploaded'), t('uploadedPosterSuccess'));
       await fetchPosters();
       closePosterModal();
-    } catch {
-      Alert.alert(t('uploadFailed'), t('uploadFailedTryAgain'));
+    } catch (err) {
+      const code = typeof (err as { code?: unknown }).code === 'string' ? String((err as { code: string }).code) : '';
+      const message = err instanceof Error ? err.message : String(err);
+      console.log('[AdminDashbord] uploadPoster:error', { code, message, err });
+      Alert.alert(t('uploadFailed'), `${t('uploadFailedTryAgain')}\n${code || message}`);
       setPosterUploading(false);
     }
   }, [closePosterModal, fetchPosters, posterImageUri, posterUploading, t]);

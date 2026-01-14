@@ -1,15 +1,16 @@
 {
   "expo": {
     "name": "National Smart Saver",
-    "slug": "National Smart Saver",
+    "slug": "national-smart-saver",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./LOGO.png",
-    "scheme": "National Smart Saver",
+    "scheme": "national-smart-saver",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nationalelectricians.app"
     },
     "android": {
       "package": "com.nationalelectricians.app",
@@ -44,6 +45,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bf228378-bffd-4f8e-8a97-cb3030208759"
+      }
     }
   }
 }

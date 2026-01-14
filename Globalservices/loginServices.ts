@@ -1,6 +1,6 @@
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore/lite';
-import { auth, db, firestoreDatabaseId, isFirebaseConfigured } from '@/Globalservices/firebase';
+import { auth, db, effectiveFirestoreDatabaseId, isFirebaseConfigured } from '@/Globalservices/firebase';
 import type { UserData } from '@/Globalservices/userStore';
 
 export type LoginResult = {
@@ -25,8 +25,8 @@ export const getLoginErrorMessage = (err: unknown) => {
   if (maybeCode.includes('auth/user-disabled')) return 'Your account has been blocked. Contact admin.';
   if (maybeCode.includes('permission-denied')) return 'Permission denied. Update Firestore rules for this user.';
   if (rawMessageLower.includes('the database (default) does not exist')) {
-    return firestoreDatabaseId !== '(default)'
-      ? `Firestore database "${firestoreDatabaseId}" is not found in this project.`
+    return effectiveFirestoreDatabaseId !== '(default)'
+      ? `Firestore database "${effectiveFirestoreDatabaseId}" is not found in this project.`
       : 'Default Firestore database is not found for this project.';
   }
   if (maybeCode.includes('failed-precondition')) return 'Firestore is not configured correctly for this project.';

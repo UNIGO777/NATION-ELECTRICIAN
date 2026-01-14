@@ -14,6 +14,11 @@ const firebaseConfig = {
 };
 
 export const firestoreDatabaseId = 'electrician';
+const envFirestoreDatabaseIdRaw = process.env.EXPO_PUBLIC_FIRESTORE_DATABASE_ID;
+export const effectiveFirestoreDatabaseId =
+  typeof envFirestoreDatabaseIdRaw === 'string' && envFirestoreDatabaseIdRaw.trim()
+    ? envFirestoreDatabaseIdRaw.trim()
+    : firestoreDatabaseId;
 
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId
@@ -31,7 +36,7 @@ export const auth =
           return getAuth(firebaseApp);
         }
       })();
-export const db = getFirestore(firebaseApp, firestoreDatabaseId);
+export const db = getFirestore(firebaseApp, effectiveFirestoreDatabaseId);
 export const storage = getStorage(firebaseApp);
 
 const secondaryAppName = 'secondary';
